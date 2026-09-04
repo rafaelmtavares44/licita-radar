@@ -56,12 +56,13 @@ def avaliar_elegibilidade(
     if r.modalidades and contratacao.modalidade_codigo not in r.modalidades:
         return f"modalidade {contratacao.modalidade_codigo} não está no perfil"
 
-    if (
-        r.valor_minimo is not None
-        and contratacao.valor_estimado is not None
-        and contratacao.valor_estimado < r.valor_minimo
-    ):
-        return f"valor abaixo do mínimo (R$ {contratacao.valor_estimado:,.2f})"
+    # Visto em dados reais de Goiás: 5 de 37 contratações vieram com
+    # valorTotalEstimado = 0. Zero ali não quer dizer "vale zero", quer dizer
+    # "o órgão não informou" — e tratar as duas coisas igual descarta
+    # licitação boa por falta de preenchimento alheio.
+    valor = contratacao.valor_estimado
+    if r.valor_minimo is not None and valor is not None and valor > 0 and valor < r.valor_minimo:
+        return f"valor abaixo do mínimo (R$ {valor:,.2f})"
 
     if contratacao.encerramento_proposta:
         momento = agora or datetime.now(UTC)

@@ -53,11 +53,14 @@ restricoes:
   ufs: ["GO", "DF"]
   modalidades: [6, 8, 4]          # pregão eletrônico, dispensa, concorrência eletrônica
 
-  # Cuidado com este número. Numa amostra real de Goiás, a maioria das
-  # dispensas ficou entre R$ 900 e R$ 13 mil — um mínimo de 50 mil elimina
-  # quase toda a modalidade 8, que é justamente onde a empresa pequena ganha.
-  # Comece baixo e vá subindo conforme o ruído incomodar.
-  valor_minimo: 10000
+  # Comece em zero e suba só quando o ruído incomodar. Numa amostra real de
+  # Goiás, a maioria das dispensas ficou entre R$ 440 e R$ 13 mil: um piso de
+  # 10 mil já elimina metade, e um de 50 mil elimina a modalidade inteira —
+  # justamente aquela em que a empresa pequena tem chance.
+  #
+  # Contratação com valor 0 significa "o órgão não informou" e nunca é
+  # descartada por este filtro.
+  valor_minimo: 0
 
   dias_minimos_ate_encerramento: 2   # não avise do que já não dá tempo de montar proposta
 

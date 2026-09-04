@@ -76,6 +76,14 @@ class TestElegibilidade:
         """Muita dispensa vem sem valor estimado — isso não pode eliminar."""
         assert avaliar_elegibilidade(_contratacao(valor_estimado=None), perfil) is None
 
+    def test_valor_zero_e_ausencia_de_informacao_nao_um_valor(self, perfil: Perfil) -> None:
+        """5 de 37 contratações reais de Goiás vieram com valorTotalEstimado 0.
+
+        Zero ali é o órgão que não preencheu o campo. Descartar por isso é
+        perder licitação boa por falha de terceiro.
+        """
+        assert avaliar_elegibilidade(_contratacao(valor_estimado=Decimal("0")), perfil) is None
+
     def test_contratacao_boa_passa(self, perfil: Perfil) -> None:
         assert avaliar_elegibilidade(_contratacao(), perfil) is None
 

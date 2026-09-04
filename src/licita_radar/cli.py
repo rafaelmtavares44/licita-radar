@@ -318,6 +318,7 @@ def cmd_match(
             await AvaliacaoRepo(banco).salvar_muitas(avaliacoes, perfil_id=perfil.id)
 
             _mostrar_funil(avaliacoes)
+            _mostrar_motivos(avaliacoes)
             _mostrar_ranking(avaliacoes, limite=limite)
 
     _rodar(_executar())
@@ -342,6 +343,46 @@ def _mostrar_funil(avaliacoes: list[Avaliacao]) -> None:
         qtd = contagem.get(veredito, 0)
         barra = "█" * round(20 * qtd / total) if total else ""
         tabela.add_row(f"[{cor}]{rotulo}[/{cor}]", str(qtd), f"[{cor}]{barra}[/{cor}]")
+
+    console.print(tabela)
+
+
+def _mostrar_motivos(avaliacoes: list[Avaliacao]) -> None:
+    """Por que as descartadas foram descartadas.
+
+    "Nada apareceu" é a primeira frustração de quem usa o radar, e a
+    resposta quase nunca é o matching: é uma restrição do perfil apertada
+    demais. Mostrar os motivos agrupados transforma um beco sem saída em
+    uma linha do YAML para ajustar.
+    """
+    descartadas = [
+        a for a in avaliacoes if a.veredito in (Veredito.INELEGIVEL, Veredito.VETADA) and a.motivo
+    ]
+    if not descartadas:
+        return
+
+    # "valor abaixo do mínimo (R$ 901,00)" e "(R$ 2.670,00)" são o mesmo
+    # motivo: agrupa pelo texto antes do parêntese.
+    contagem = Counter(a.motivo.split(" (")[0] for a in descartadas if a.motivo)
+
+    tabela = Table(title="\nPor que foram descartadas", header_style="bold", title_justify="left")
+    tabela.add_column("motivo")
+    tabela.add_column("qtd", justify="right", no_wrap=True)
+    tabela.add_column("onde ajustar", overflow="fold")
+
+    onde = {
+        "fora das UFs do perfil": "restricoes.ufs",
+        "valor abaixo do mínimo": "restricoes.valor_minimo",
+        "prazo curto demais": "restricoes.dias_minimos_ate_encerramento",
+        "prazo já encerrado": "—  a proposta fechou antes de você coletar",
+        "contém a palavra negativa": "palavras_chave.negativas",
+    }
+
+    for motivo, qtd in contagem.most_common(8):
+        ajuste = next((v for k, v in onde.items() if motivo.startswith(k)), "")
+        if motivo.startswith("modalidade"):
+            ajuste = "restricoes.modalidades"
+        tabela.add_row(motivo, str(qtd), f"[dim]{ajuste}[/dim]")
 
     console.print(tabela)
 
