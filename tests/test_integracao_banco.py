@@ -83,6 +83,8 @@ class TestTraducaoDeFalha:
 
         assert "usuário não existe nele" in recado
         assert "docker compose down -v" in recado
+        # a causa mais comum é ter testado antes do healthy
+        assert "healthy" in recado
 
     def test_banco_inexistente(self) -> None:
         recado = traduzir_falha(OSError('database "licita_radar" does not exist'), "postgresql://x")

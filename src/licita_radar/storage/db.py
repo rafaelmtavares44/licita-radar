@@ -55,9 +55,13 @@ def traduzir_falha(erro: BaseException, alvo: str) -> str:
     if "role" in detalhe and ("does not exist" in detalhe or "não existe" in detalhe):
         return (
             f"O banco em {alvo} respondeu, mas o usuário não existe nele.\n\n"
-            "  O Postgres só cria o usuário do compose quando o volume está\n"
-            "  vazio. Se ele foi inicializado antes, ignora POSTGRES_USER.\n\n"
-            "  • Apague o volume e deixe nascer de novo:\n"
+            "  • Acabou de subir o container? Espere o healthy antes de tentar:\n"
+            "        docker compose ps\n"
+            "    Na primeira vez o Postgres leva de 10 a 30 s criando o cluster,\n"
+            "    e a porta já responde antes de o usuário existir.\n\n"
+            "  • Já está healthy e mesmo assim falha? O volume foi inicializado\n"
+            "    numa tentativa anterior, e o Postgres só cria o usuário do\n"
+            "    compose quando o volume está vazio. Apague e recrie:\n"
             "        docker compose down -v\n"
             "        docker compose up -d db\n"
             "    (só faça isso se não houver dado que você queira manter)"
