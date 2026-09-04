@@ -158,6 +158,21 @@ class TestAvaliar:
 
         assert avaliacao.score_final == pytest.approx(esperado)
 
+    def test_sem_semantica_o_lexico_sozinho_ainda_alcanca_o_limiar(self, perfil: Perfil) -> None:
+        """Com peso_lexical 0,35, o teto do score no modo léxico seria 0,35 —
+        e o limiar de 0,72 nunca seria atingido. Nenhuma contratação poderia
+        virar candidata, por melhor que fosse o casamento de palavras."""
+        casa_bem = _contratacao(
+            objeto="Desenvolvimento de software e sustentação de sistemas sob demanda"
+        )
+
+        com_pesos = avaliar(casa_bem, perfil, score_semantico=0.0)
+        so_lexico = avaliar(casa_bem, perfil, com_semantica=False)
+
+        assert com_pesos.veredito is Veredito.ABAIXO_DO_LIMIAR
+        assert so_lexico.score_final > com_pesos.score_final
+        assert so_lexico.veredito is Veredito.CANDIDATA
+
     def test_toda_avaliacao_tem_explicacao_em_portugues(self, perfil: Perfil) -> None:
         for score in (0.0, 0.5, 0.95):
             frase = explicar(avaliar(_contratacao(), perfil, score_semantico=score))

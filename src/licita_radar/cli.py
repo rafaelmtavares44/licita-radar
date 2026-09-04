@@ -334,10 +334,18 @@ def cmd_match(
                     if vetor
                 }
             else:
-                console.print("[yellow]modo léxico: a camada semântica não vai rodar[/yellow]")
+                console.print(
+                    "[yellow]modo léxico: a camada semântica não vai rodar — o score é só "
+                    "das palavras-chave[/yellow]"
+                )
 
             avaliacoes = [
-                avaliar(c, perfil, score_semantico=scores.get(c.numero_controle_pncp, 0.0))
+                avaliar(
+                    c,
+                    perfil,
+                    score_semantico=scores.get(c.numero_controle_pncp, 0.0),
+                    com_semantica=not sem_semantica,
+                )
                 for c in contratacoes
             ]
             await AvaliacaoRepo(banco).salvar_muitas(avaliacoes, perfil_id=perfil.id)

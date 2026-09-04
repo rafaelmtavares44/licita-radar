@@ -26,15 +26,25 @@ cnaes:
   - "6311-9/00"   # tratamento de dados e hospedagem
 
 palavras_chave:
+  # Vocabulário retirado de contratações federais reais. O PNCP raramente
+  # escreve "fábrica de software": escreve "licença", "solução", "sistema
+  # informatizado". Palavra-chave é comparação literal — se o edital usa
+  # outra palavra, só a camada semântica salva.
   positivas:
     - desenvolvimento de software
     - fábrica de software
     - sustentação de sistemas
     - manutenção evolutiva
     - sistema web
+    - sistema informatizado
     - api de integração
     - alocação de mão de obra em ti
     - licenciamento de software
+    - licença de software
+    - licenças de software
+    - solução de tecnologia da informação
+    - solução integrada
+    - subscrição de software
 
   # A lista que mais aumenta a precisão do alerta.
   # Buscar "TI" no PNCP devolve muito toner e cabo de rede.

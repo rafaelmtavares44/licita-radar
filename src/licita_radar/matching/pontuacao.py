@@ -42,6 +42,7 @@ def avaliar(
     perfil: Perfil,
     *,
     score_semantico: float = 0.0,
+    com_semantica: bool = True,
     agora: datetime | None = None,
 ) -> Avaliacao:
     """Aplica o funil inteiro a uma contratação.
@@ -67,7 +68,15 @@ def avaliar(
         )
 
     p = perfil.pontuacao
-    final = p.peso_lexical * lexical.score + p.peso_semantico * score_semantico
+
+    if com_semantica:
+        final = p.peso_lexical * lexical.score + p.peso_semantico * score_semantico
+    else:
+        # Sem a camada semântica, o peso dela não pode simplesmente sumir: com
+        # peso_lexical de 0,35, o teto do score viraria 0,35 e o limiar de 0,72
+        # ficaria inalcançável — nenhuma contratação jamais seria candidata.
+        # Redistribuir devolve a escala de 0 a 1 ao que sobrou.
+        final = lexical.score
 
     passou = final >= p.limiar_alerta
     veredito = Veredito.CANDIDATA if passou else Veredito.ABAIXO_DO_LIMIAR
