@@ -2,7 +2,7 @@
 
 Pulados por padrão. Para rodar:
 
-    export LR_TEST_DATABASE_URL=postgresql://licita:licita@localhost:5432/licita_radar
+    export LR_TEST_DATABASE_URL=postgresql://licita:licita@127.0.0.1:5432/licita_radar
     pytest -m integracao
 
 O que está aqui não dá para testar com dublê: migração aplicada em ordem,
@@ -20,7 +20,7 @@ import pytest
 
 from licita_radar.config.settings import Settings
 from licita_radar.ingest.modelos import Contratacao
-from licita_radar.storage.db import Banco, ErroDeBanco, migrar
+from licita_radar.storage.db import Banco, ErroDeBanco, migrar, traduzir_falha
 from licita_radar.storage.repositories import ContratacaoRepo, ExecucaoRepo
 
 pytestmark = pytest.mark.integracao
@@ -58,6 +58,28 @@ async def banco():  # type: ignore[no-untyped-def]
             await conn.commit()
         await migrar(b)
         yield b
+
+
+class TestTraducaoDeFalha:
+    """As três falhas de banco precisam de três recados diferentes."""
+
+    def test_conexao_recusada(self) -> None:
+        recado = traduzir_falha(OSError("connection refused"), "postgresql://x")
+
+        assert "O Postgres está rodando?" in recado
+        assert "127.0.0.1" in recado  # a dica do Windows
+
+    def test_usuario_recusado_aponta_o_postgres_errado(self) -> None:
+        erro = OSError('password authentication failed for user "licita"')
+        recado = traduzir_falha(erro, "postgresql://x")
+
+        assert "recusou o usuário" in recado
+        assert "OUTRO Postgres" in recado
+
+    def test_banco_inexistente(self) -> None:
+        recado = traduzir_falha(OSError('database "licita_radar" does not exist'), "postgresql://x")
+
+        assert "não existe nesse servidor" in recado
 
 
 async def test_banco_fora_do_ar_vira_recado_e_nao_stack_trace() -> None:

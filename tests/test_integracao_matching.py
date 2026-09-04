@@ -1,6 +1,6 @@
 """Integração do M2: pgvector, embeddings e avaliações num Postgres real.
 
-    export LR_TEST_DATABASE_URL=postgresql://licita:licita@localhost:5432/licita_radar
+    export LR_TEST_DATABASE_URL=postgresql://licita:licita@127.0.0.1:5432/licita_radar
     pytest -m integracao
 
 O que se testa aqui não dá para testar com dublê: se o vetor sobrevive à

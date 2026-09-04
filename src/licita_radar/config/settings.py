@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     # --- banco ---
-    database_url: str = "postgresql://licita:licita@localhost:5432/licita_radar"
+    database_url: str = "postgresql://licita:licita@127.0.0.1:5432/licita_radar"
 
     #: Curto de propósito. Banco fora do ar é a falha mais comum de quem
     #: está começando, e ela deve aparecer em segundos, não em meio minuto.

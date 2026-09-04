@@ -40,6 +40,45 @@ CREATE TABLE IF NOT EXISTS schema_migracao (
 """
 
 
+def traduzir_falha(erro: BaseException, alvo: str) -> str:
+    """Transforma o erro do Postgres na dica certa.
+
+    Recusar conexão, recusar usuário e não achar o banco são problemas
+    diferentes; mandar a mesma mensagem para os três faz a pessoa procurar
+    no lugar errado.
+    """
+    detalhe = str(erro).lower()
+
+    if "authentication" in detalhe or "senha" in detalhe or "role" in detalhe:
+        return (
+            f"O banco em {alvo} respondeu, mas recusou o usuário.\n\n"
+            "  Isso costuma significar que há OUTRO Postgres nessa porta —\n"
+            "  o que você instalou na máquina, e não o do docker compose.\n\n"
+            "  • Confira quem atende:       docker compose ps\n"
+            "  • Se o container está de pé, mude a porta: LR_DB_PORT=5433 no .env\n"
+            "    e ajuste a porta também na LR_DATABASE_URL. Depois:\n"
+            "        docker compose up -d db"
+        )
+
+    if "does not exist" in detalhe or "não existe" in detalhe:
+        return (
+            f"O banco de dados em {alvo} não existe nesse servidor.\n\n"
+            "  • Subiu pelo compose?          docker compose up -d db\n"
+            "  • Aponta para outro Postgres?  confira LR_DATABASE_URL no .env"
+        )
+
+    return (
+        f"Não consegui conectar no banco em {alvo}.\n\n"
+        "  • O Postgres está rodando?   docker compose up -d db\n"
+        "  • Acabou de subir? Espere uns 20 s: na primeira vez o container\n"
+        "    cria o cluster antes de aceitar conexão.\n"
+        "  • Confira o estado:          docker compose ps\n"
+        "  • No Windows, troque 'localhost' por '127.0.0.1' na URL: o Docker\n"
+        "    Desktop costuma publicar a porta só em IPv4.\n"
+        "  • Usa outro banco?           ajuste LR_DATABASE_URL no .env"
+    )
+
+
 class Banco:
     """Dono do pool de conexões. Uma instância por processo."""
 
@@ -47,16 +86,30 @@ class Banco:
         self._s = settings or get_settings()
         self._pool: AsyncConnectionPool | None = None
 
-    def _dica(self) -> str:
-        return (
-            f"Não consegui conectar no banco em {self._s.database_url_segura}.\n\n"
-            "  • O Postgres está rodando?   docker compose up -d db\n"
-            "  • Já subiu?  confira:        docker compose ps\n"
-            "  • Usa outro banco?           ajuste LR_DATABASE_URL no .env"
-        )
+    def _dica(self, erro: BaseException) -> str:
+        return traduzir_falha(erro, self._s.database_url_segura)
+
+    async def _ping(self) -> None:
+        """Uma conexão de teste antes de abrir o pool.
+
+        O pool tenta reconectar em laço e, quando desiste, entrega um
+        `PoolTimeout` que já perdeu a causa original — "senha recusada" e
+        "ninguém atende" chegam idênticos. Uma conexão direta preserva o
+        erro do Postgres, e é dele que sai a dica certa.
+        """
+        try:
+            conexao = await AsyncConnection.connect(
+                self._s.database_url,
+                connect_timeout=int(self._s.database_timeout_s),
+            )
+        except OperationalError as erro:
+            raise ErroDeBanco(self._dica(erro)) from erro
+        await conexao.close()
 
     async def abrir(self) -> None:
         if self._pool is None:
+            await self._ping()
+
             pool = AsyncConnectionPool(
                 self._s.database_url,
                 min_size=1,
@@ -68,7 +121,7 @@ class Banco:
                 await pool.open(wait=True, timeout=self._s.database_timeout_s)
             except (PoolTimeout, OperationalError) as erro:
                 await pool.close()
-                raise ErroDeBanco(self._dica()) from erro
+                raise ErroDeBanco(self._dica(erro)) from erro
 
             self._pool = pool
             logger.debug("pool de conexões aberto")

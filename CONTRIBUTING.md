@@ -34,7 +34,7 @@ Testes que precisam de Postgres de verdade ficam marcados com
 `@pytest.mark.integracao` e são pulados por padrão:
 
 ```bash
-export LR_TEST_DATABASE_URL=postgresql://licita:licita@localhost:5432/licita_radar
+export LR_TEST_DATABASE_URL=postgresql://licita:licita@127.0.0.1:5432/licita_radar
 pytest -m integracao
 ```
 
