@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Any
@@ -16,7 +17,12 @@ from licita_radar.config.perfil import ErroDePerfil, Perfil, carregar_perfil
 from licita_radar.config.settings import get_settings
 from licita_radar.ingest.modalidades import rotular
 from licita_radar.ingest.pncp_client import coletar
+from licita_radar.matching.encoder import FastEmbedEncoder, similaridade_cosseno
+from licita_radar.matching.limpeza import limpar_objeto
+from licita_radar.matching.pontuacao import Avaliacao, Veredito, avaliar, explicar
+from licita_radar.matching.semantico import MotorSemantico
 from licita_radar.storage.db import Banco, migrar
+from licita_radar.storage.matching_repo import AvaliacaoRepo, EmbeddingRepo, MatchingRepo
 from licita_radar.storage.repositories import ContratacaoRepo, ExecucaoRepo
 
 app = typer.Typer(
@@ -192,6 +198,126 @@ def cmd_listar(
             str(linha["orgao_nome"] or "—"),
             _moeda(linha["valor_estimado"]),
         )
+    console.print(tabela)
+
+
+@app.command("match")
+def cmd_match(
+    uf: Annotated[str | None, typer.Option("--uf")] = None,
+    limite: Annotated[int, typer.Option("--limite", "-n", help="Linhas no ranking")] = 20,
+    caminho_perfil: Annotated[Path | None, typer.Option("--perfil", "-p")] = None,
+    sem_semantica: Annotated[
+        bool,
+        typer.Option(
+            "--sem-semantica",
+            help="Só a camada léxica. Não baixa modelo — bom para calibrar as palavras-chave",
+        ),
+    ] = False,
+) -> None:
+    """Pontua o que está no banco contra o seu perfil."""
+    _configurar_log()
+    perfil = _carregar_ou_sair(caminho_perfil or get_settings().perfil_path)
+
+    async def _executar() -> None:
+        async with Banco() as banco:
+            matching = MatchingRepo(banco)
+            contratacoes = await matching.carregar_contratacoes(uf=uf, limite=500)
+
+            if not contratacoes:
+                console.print("[dim]nada no banco — rode `licita-radar ingest` antes[/dim]")
+                return
+
+            console.print(f"[dim]avaliando {len(contratacoes)} contratações[/dim]")
+            scores: dict[str, float] = {}
+
+            if not sem_semantica:
+                motor = MotorSemantico(FastEmbedEncoder())
+                embeddings = EmbeddingRepo(banco)
+                pendentes = set(
+                    await embeddings.numeros_sem_embedding(modelo=motor.encoder.nome, limite=500)
+                )
+                a_codificar = [c for c in contratacoes if c.numero_controle_pncp in pendentes]
+
+                if a_codificar:
+                    console.print(f"[dim]codificando {len(a_codificar)} novas…[/dim]")
+                    codificados = motor.codificar_contratacoes(a_codificar)
+                    await embeddings.salvar_muitos(codificados, modelo=motor.encoder.nome)
+
+                vetores = await matching.vetores([c.numero_controle_pncp for c in contratacoes])
+                vetor_perfil = motor.vetor_do_perfil(perfil)
+                scores = {
+                    numero: similaridade_cosseno(vetor_perfil, vetor)
+                    for numero, vetor in vetores.items()
+                    if vetor
+                }
+            else:
+                console.print("[yellow]modo léxico: a camada semântica não vai rodar[/yellow]")
+
+            avaliacoes = [
+                avaliar(c, perfil, score_semantico=scores.get(c.numero_controle_pncp, 0.0))
+                for c in contratacoes
+            ]
+            await AvaliacaoRepo(banco).salvar_muitas(avaliacoes, perfil_id=perfil.id)
+
+            _mostrar_funil(avaliacoes)
+            _mostrar_ranking(avaliacoes, limite=limite)
+
+    asyncio.run(_executar())
+
+
+def _mostrar_funil(avaliacoes: list[Avaliacao]) -> None:
+    contagem = Counter(a.veredito for a in avaliacoes)
+    total = len(avaliacoes)
+
+    tabela = Table(title="O funil", header_style="bold", title_justify="left")
+    tabela.add_column("etapa")
+    tabela.add_column("qtd", justify="right")
+    tabela.add_column("", justify="left")
+
+    rotulos = {
+        Veredito.INELEGIVEL: ("não passou nos filtros", "dim"),
+        Veredito.VETADA: ("vetada por palavra negativa", "red"),
+        Veredito.ABAIXO_DO_LIMIAR: ("abaixo do limiar", "yellow"),
+        Veredito.CANDIDATA: ("candidata — merece o seu olho", "green"),
+    }
+    for veredito, (rotulo, cor) in rotulos.items():
+        qtd = contagem.get(veredito, 0)
+        barra = "█" * round(20 * qtd / total) if total else ""
+        tabela.add_row(f"[{cor}]{rotulo}[/{cor}]", str(qtd), f"[{cor}]{barra}[/{cor}]")
+
+    console.print(tabela)
+
+
+def _mostrar_ranking(avaliacoes: list[Avaliacao], *, limite: int) -> None:
+    vivas = sorted(
+        (a for a in avaliacoes if a.veredito in (Veredito.CANDIDATA, Veredito.ABAIXO_DO_LIMIAR)),
+        key=lambda a: a.score_final,
+        reverse=True,
+    )[:limite]
+
+    if not vivas:
+        console.print("\n[dim]nenhuma contratação sobreviveu aos filtros desta vez[/dim]")
+        return
+
+    tabela = Table(title=f"\nTop {len(vivas)}", header_style="bold", title_justify="left")
+    tabela.add_column("score", justify="right", no_wrap=True)
+    tabela.add_column("lex", justify="right", no_wrap=True)
+    tabela.add_column("sem", justify="right", no_wrap=True)
+    # uma licitação por linha: objeto real tem até 500 caracteres e, sem
+    # no_wrap, cada linha vira um parágrafo e o ranking fica ilegível
+    tabela.add_column("objeto", overflow="ellipsis", max_width=58, no_wrap=True)
+    tabela.add_column("por quê", overflow="ellipsis", max_width=38, no_wrap=True)
+
+    for a in vivas:
+        cor = "green" if a.alerta else "yellow"
+        tabela.add_row(
+            f"[{cor}]{a.score_final:.2f}[/{cor}]",
+            f"{a.score_lexical:.2f}",
+            f"{a.score_semantico:.2f}",
+            limpar_objeto(a.contratacao.objeto),
+            explicar(a),
+        )
+
     console.print(tabela)
 
 

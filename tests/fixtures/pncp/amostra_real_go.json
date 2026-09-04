@@ -1,0 +1,334 @@
+{
+  "_nota": "AMOSTRA REAL da API do PNCP, capturada em 04/09/2026 (UF=GO, proposta aberta). Dado público, reduzido a 12 registros representativos: ruído de informática, prefixos burocráticos, objeto vago e um pregão. É a base dos testes de matching.",
+  "data": [
+    {
+      "orgaoEntidade": {
+        "cnpj": "00394452000103",
+        "razaoSocial": "COMANDO DO EXERCITO",
+        "poderId": "E",
+        "esferaId": "F"
+      },
+      "dataPublicacaoPncp": "2026-08-25T04:00:37",
+      "srp": true,
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "160432",
+        "nomeUnidade": "CENTRO DE LOGISTICA DE MISSEIS E FOGUETES",
+        "ufSigla": "GO",
+        "municipioNome": "Formosa",
+        "codigoIbge": "5208004"
+      },
+      "dataAberturaProposta": "2026-08-25T10:00:00",
+      "dataEncerramentoProposta": "2026-09-04T18:00:00",
+      "informacaoComplementar": null,
+      "objetoCompra": "Esta aquisição visa prover o Centro de Logística de Mísseis e Foguetes (C Log Msl Fgt) com materiais para manutenção preventiva e corretiva, essencial para a melhoria do material e diminuição dos gastos com as 83 (oitenta e três) viaturas do Sistema de Mísseis e Foguetes que compõem o Forte Santa Bárbara, as quais totalizam um valor patrimonial de mais de R$ 1 bilhão de reais, possuindo elevada complexidade de manutenção e diversos materiais embarcados de alto valor agregado.",
+      "numeroControlePNCP": "00394452000103-1-018576/2026",
+      "modalidadeId": 6,
+      "valorTotalEstimado": 1127403.54,
+      "modalidadeNome": "Pregão - Eletrônico",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "02204196000161",
+        "razaoSocial": "MUNICIPIO DE ITUMBIARA",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-08-24T14:58:21",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "3",
+        "nomeUnidade": "FUNDO MUNICIPAL DE SAUDE",
+        "ufSigla": "GO",
+        "municipioNome": "Itumbiara",
+        "codigoIbge": "5211503"
+      },
+      "dataAberturaProposta": "2026-09-01T08:00:01",
+      "dataEncerramentoProposta": "2026-09-04T23:59:59",
+      "informacaoComplementar": "Contratação de empresa especializada do ramo de telecomunicações para fornecimento do serviço de telefonia por entroncamentos digitais por DDR, ligações ilimitadas locais, LDN e móvel, com fornecimento de equipamentos e suporte técnico para atender as necessidades do Serviço de Atendimento Móvel de Urgência – SAMU, visando atender as necessidades do Fundo Municipal de Saúde, conforme especificações do Termo de Referência",
+      "objetoCompra": "CONTRATAÇÃO DE EMPRESA ESPECIALIZADA DO RAMO DE TELECOMUNICAÇÕES PARA FORNECIMENTO DO SERVIÇO DE TELEFONIA POR ENTRONCAMENTOS DIGITAIS POR DDR, LIGAÇÕES ILIMITADAS LOCAIS, LDN E MÓVEL, COM FORNECIMENT",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "02204196000161-1-000402/2026",
+      "valorTotalEstimado": 8398.8,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "02029957000196",
+        "razaoSocial": "MUNICIPIO DE JOVIANIA",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T09:03:04",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "6",
+        "nomeUnidade": "FUNDO MUNICIPAL DE ASSISTENCIA SOCIAL",
+        "ufSigla": "GO",
+        "municipioNome": "Joviânia",
+        "codigoIbge": "5212105"
+      },
+      "dataAberturaProposta": "2026-09-01T08:53:36",
+      "dataEncerramentoProposta": "2026-09-04T17:00:00",
+      "informacaoComplementar": "O PRESENTE TERMO TEM COMO OBJETO A AQUISIÇÃO DE 3 (TRÊS) IMPRESSORAS TANQUE DE TINTA L3250, DESTINADO A SUPRIR AS NECESSIDADES OPERACIONAIS DA SECRETARIA DE ASSISTÊNCIA SOCIAL, VISANDO GARANTIR MAIOR EFICIÊNCIA NA EXECUÇÃO DAS ATIVIDADES ADMINISTRATIVAS E NO ATENDIMENTO À POPULAÇÃO.\n\nA DESPESA ESPECIFICADA SERÁ PAGA COM RECURSO DO BLOCO PROCAD SUAS - CONTA CORRENTE Nº 13.847-9, AGÊNCIA: 3.681-1 \n",
+      "objetoCompra": "O PRESENTE TERMO TEM COMO OBJETO A AQUISIÇÃO DE 3 (TRÊS) IMPRESSORAS TANQUE DE TINTA L3250, DESTINADO A SUPRIR AS NECESSIDADES OPERACIONAIS DA SECRETARIA DE ASSISTÊNCIA SOCIAL, VISANDO GARANTIR MAIOR ",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "02029957000196-1-000168/2026",
+      "valorTotalEstimado": 3597.0,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "02029957000196",
+        "razaoSocial": "MUNICIPIO DE JOVIANIA",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T09:21:42",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "6",
+        "nomeUnidade": "FUNDO MUNICIPAL DE ASSISTENCIA SOCIAL",
+        "ufSigla": "GO",
+        "municipioNome": "Joviânia",
+        "codigoIbge": "5212105"
+      },
+      "dataAberturaProposta": "2026-09-01T09:17:21",
+      "dataEncerramentoProposta": "2026-09-04T17:00:00",
+      "informacaoComplementar": "1 -TERMO DE SOLICITAÇÃO\nSOLICITAÇÃO DE AQUISIÇÃO DE MOBILIARIO EM GERAL.  \n2 - TERMO DE REFERÊNCIA \n2.1 - OBJETO \nAQUISIÇÃO DE MOBILIARIO GERAL DESTINADO AO FUNDO MUNICIPAL DE ASSISTÊNCIA SOCIAL\n2.2 - JUSTIFICATIVA \nA PRESENTE CONTRATAÇÃO JUSTIFICA-SE PELA NECESSIDADE DE AQUISIÇÃO DE MOBILIÁRIO DESTINADO À SECRETARIA DE ASSISTÊNCIA SOCIAL, VISANDO PROPORCIONAR MELHORES CONDIÇÕES DE TRABALHO AOS SERVIDORES E MAIOR CONFORTO E COMODIDADE AOS USUÁRIOS QUE NECESSITAM DOS SERVIÇOS PRESTADOS PELO ÓRGÃO. DIANTE DO EXPOSTO, A AQUISIÇÃO DOS REFERIDOS MOBILIÁRIOS É NECESSÁRIA PARA ATENDER AO INTERESSE PÚBLICO, PROPORCIONANDO MELHORES CONDIÇÕES DE TRABALHO, ATENDIMENTO E ACOLHIMENTO AOS USUÁRIOS DOS SERVIÇOS SOCIOASSISTENCIAIS.\n2.3 - PAGAMENTO\nA DESPESA ESPECIFICADA SERÁ PAGA COM RECURSO DO BLOCO FINANCEIRO DO IGD/PBF - CONTA CORRENTE Nº 11.238-0, AGÊNCIA 3.681-1 - BANCO DO BRASIL - FONTE 129.56\n",
+      "objetoCompra": "1 -TERMO DE SOLICITAÇÃO\nSOLICITAÇÃO DE AQUISIÇÃO DE MOBILIARIO EM GERAL.  \n2 - TERMO DE REFERÊNCIA \n2.1 - OBJETO \nAQUISIÇÃO DE MOBILIARIO GERAL DESTINADO AO FUNDO MUNICIPAL DE ASSISTÊNCIA SOCIAL\n2.2 -",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "02029957000196-1-000169/2026",
+      "valorTotalEstimado": 6075.18,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "01319326000149",
+        "razaoSocial": "MUNICIPIO DE CATURAI",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T13:46:34",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "14",
+        "nomeUnidade": "FUNDO MUNICIPAL DO MEIO AMBIENTE",
+        "ufSigla": "GO",
+        "municipioNome": "Caturaí",
+        "codigoIbge": "5205208"
+      },
+      "dataAberturaProposta": "2026-09-01T09:00:00",
+      "dataEncerramentoProposta": "2026-09-04T16:00:00",
+      "informacaoComplementar": "CONTRATAÇÃO DE EMPRESA PARA FORNECIMENTO DE PICOLÉS, DESTINADOS À REALIZAÇÃO DE EVENTO EM COMEMORAÇÃO AO DIA DAS CRIANÇAS, A SEREM DISTRIBUÍDOS AOS ALUNOS MATRICULADOS NA REDE MUNICIPAL DE ENSINO, DA ESCOLA MUNICIPAL NIVALDO ÂNGELO DA SILVA E CMEI CAROLINA DA LUZ.",
+      "objetoCompra": "AQUISIÇÃO DE PICOLÉS PARA O DIA DAS CRIANÇAS",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "01319326000149-1-000057/2026",
+      "valorTotalEstimado": 901.0,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "01005917000141",
+        "razaoSocial": "MUNICIPIO DE BELA VISTA DE GOIAS",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T14:54:55",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "2",
+        "nomeUnidade": "PODER EXECUTIVO BELA VISTA DE GOIAS",
+        "ufSigla": "GO",
+        "municipioNome": "Bela Vista de Goiás",
+        "codigoIbge": "5203302"
+      },
+      "dataAberturaProposta": "2026-09-01T14:15:00",
+      "dataEncerramentoProposta": "2026-09-04T17:00:00",
+      "informacaoComplementar": null,
+      "objetoCompra": "CONTRATAÇÃO DIRETA, POR DISPENSA DE LICITAÇÃO, DE PROFISSIONAL ESPECIALIZADO PARA PRESTAÇÃO DE SERVIÇOS DE COMUNICAÇÃO INSTITUCIONAL E PRODUÇÃO DE CONTEÚDO DIGITAL, COM ATUAÇÃO COMO INFLUENCIADOR DIGITAL, DESTINADO À COBERTURA, APRESENTAÇÃO E DIVULGAÇÃO DE EVENTOS OFICIAIS, AÇÕES GOVERNAMENTAIS, CAMPANHAS INSTITUCIONAIS E ATIVIDADES DE INTERESSE PÚBLICO PROMOVIDAS PELA PREFEITURA MUNICIPAL DE BELA VISTA DE GOIÁS",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "01005917000141-1-000097/2026",
+      "valorTotalEstimado": 63249.65,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "25107525000151",
+        "razaoSocial": "MUNICIPIO DE SENADOR CANEDO",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T15:49:08",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "5600",
+        "nomeUnidade": "SECRETARIA MUNICIPAL DE COMUNICAÇÃO E EVENTOS",
+        "ufSigla": "GO",
+        "municipioNome": "Senador Canedo",
+        "codigoIbge": "5220454"
+      },
+      "dataAberturaProposta": "2026-09-02T08:00:00",
+      "dataEncerramentoProposta": "2026-09-04T17:00:00",
+      "informacaoComplementar": "",
+      "objetoCompra": "[Portal de Compras Públicas] - DISPENSA - Contratação de empresa especializada para prestação de serviços de manutenção preventiva e corretiva - DRONES E CÂMERA PROFISSIONAL.",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "25107525000151-1-000401/2026",
+      "valorTotalEstimado": 7625.0,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "02391654000119",
+        "razaoSocial": "MUNICIPIO DE SAO MIGUEL DO ARAGUAIA",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T15:57:27",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "10",
+        "nomeUnidade": "MUNICIPIO DE SAO MIGUEL DO ARAGUAIA",
+        "ufSigla": "GO",
+        "municipioNome": "São Miguel do Araguaia",
+        "codigoIbge": "5220207"
+      },
+      "dataAberturaProposta": "2026-09-01T15:49:01",
+      "dataEncerramentoProposta": "2026-09-04T17:00:00",
+      "informacaoComplementar": "SOLICITAÇÃO DE AQUISIÇÃO DE MATERIAL INFORMÁTICA PARA SER UTILIZADO NO DEPARTAMENTO DE ENGENHARIA E CONVÊNIOS - DECON, PARA A IMPRESSÃO DE DOCUMENTOS PROVENIENTES DE CONTRATOS, PROJETOS E CONVÊNIOS",
+      "objetoCompra": "SOLICITAÇÃO DE AQUISIÇÃO DE MATERIAL INFORMÁTICA PARA SER UTILIZADO NO DEPARTAMENTO DE ENGENHARIA E CONVÊNIOS - DECON, PARA A IMPRESSÃO DE DOCUMENTOS PROVENIENTES DE CONTRATOS, PROJETOS E CONVÊNIOS",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "02391654000119-1-000570/2026",
+      "valorTotalEstimado": 4489.0,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "01335363000140",
+        "razaoSocial": "MUNICIPIO DE DIORAMA",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T16:15:51",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "2",
+        "nomeUnidade": "PREFEITURA MUNICIPAL DE DIORAMA",
+        "ufSigla": "GO",
+        "municipioNome": "Diorama",
+        "codigoIbge": "5207105"
+      },
+      "dataAberturaProposta": "2026-09-02T08:00:00",
+      "dataEncerramentoProposta": "2026-09-04T16:00:00",
+      "informacaoComplementar": null,
+      "objetoCompra": "AQUISIÇÃO DE MATERIAIS CONFORME PROJETO DE ENGENHARIA PARA REALIZAÇÃO DE IMPLANTAÇÃO DE REDE DE ABASTECIMENTO DE ÁGUA NA COMUNIDADE BEIRA RIO. TAL AÇÃO VISA GARANTIR CONDIÇÕES MÍNIMAS DE MORADIA A POPULAÇÃO RESIDENTE DA REGIÃO.",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "01335363000140-1-000199/2026",
+      "valorTotalEstimado": 13636.24,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "02056737000151",
+        "razaoSocial": "MUNICIPIO DE QUIRINOPOLIS",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T16:25:48",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "18",
+        "nomeUnidade": "FUNDO ESPECIAL MUL DE REAPAR CORPO DE BOMB MILITA",
+        "ufSigla": "GO",
+        "municipioNome": "Quirinópolis",
+        "codigoIbge": "5218508"
+      },
+      "dataAberturaProposta": "2026-09-01T16:30:00",
+      "dataEncerramentoProposta": "2026-09-04T23:59:00",
+      "informacaoComplementar": "SOLICITAÇÃO DE COMPRA DE MATERIAIS DE INFORMÁTICA SENDO IMPRESSORA PARA O SETOR DA SEÇÃO CONTRA INCÊNDIO E PÂNICO - SECIP EM NOSSA UNIDADE, ASSIM ATENDENDO AS NECESSIDADES DO FUNDO ESPECIAL MUNICIPAL DE REEQUIPAMENTO DO CORPO DE BOMBEIROS MILITAR. | COMPRAS AGRUPADAS DOS PEDIDOS: 2020067995",
+      "objetoCompra": "AQUISIÇÃO DE MATERIAIS DE INFORMÁTICA SENDO IMPRESSORA PARA O SETOR DA SEÇÃO CONTRA INCÊNDIO E PÂNICO - SECIP EM NOSSA UNIDADE, ASSIM ATENDENDO AS NECESSIDADES DO FUNDO ESPECIAL MUNICIPAL DE REEQUIPAM",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "02056737000151-1-000289/2026",
+      "valorTotalEstimado": 0.0,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "02264166000140",
+        "razaoSocial": "MUNICIPIO DE SANTA BARBARA DE GOIAS",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T16:52:17",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "25",
+        "nomeUnidade": "SEC. MUL. DE ESPORTE E LAZER",
+        "ufSigla": "GO",
+        "municipioNome": "Santa Bárbara de Goiás",
+        "codigoIbge": "5219100"
+      },
+      "dataAberturaProposta": "2026-09-01T16:51:00",
+      "dataEncerramentoProposta": "2026-09-04T17:00:00",
+      "informacaoComplementar": "",
+      "objetoCompra": "PRESTAÇÃO DE SERVIÇOS ESPECIALIZADOS",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "02264166000140-1-000139/2026",
+      "valorTotalEstimado": 1333.33,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    },
+    {
+      "srp": false,
+      "orgaoEntidade": {
+        "cnpj": "01065846000172",
+        "razaoSocial": "MUNICIPIO DE GOIANESIA",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "dataPublicacaoPncp": "2026-09-01T17:06:59",
+      "unidadeOrgao": {
+        "ufNome": "Goiás",
+        "codigoUnidade": "0313",
+        "nomeUnidade": "SECRETARIA MUNICIPAL DE INFRA-ESTRUTURA",
+        "ufSigla": "GO",
+        "municipioNome": "Goianésia",
+        "codigoIbge": "5208608"
+      },
+      "dataAberturaProposta": "2026-09-01T17:00:00",
+      "dataEncerramentoProposta": "2026-09-04T17:00:00",
+      "informacaoComplementar": "",
+      "objetoCompra": "DESPESA COM AQUISIÇÃO DE ÓLEO PARA REPOSIÇÃO E MANUTENÇÃO DA RETROESCAVADEIRA JCB 3CX 4X4 SÉRIE: 3038890 (CÓDIGO DE FROTA 524), EM ATENDIMENTO ÀS NECESSIDADES DA SECRETARIA DE INFRAESTRUTURA.",
+      "modalidadeId": 8,
+      "numeroControlePNCP": "01065846000172-1-001033/2026",
+      "valorTotalEstimado": 2670.0,
+      "modalidadeNome": "Dispensa",
+      "situacaoCompraNome": "Divulgada no PNCP"
+    }
+  ],
+  "totalRegistros": 12,
+  "totalPaginas": 1,
+  "numeroPagina": 1,
+  "paginasRestantes": 0,
+  "empty": false
+}

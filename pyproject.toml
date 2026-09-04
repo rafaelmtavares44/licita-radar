@@ -29,6 +29,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# O matching semântico é opcional de propósito: `licita-radar ingest` e
+# `match --sem-semantica` funcionam sem baixar modelo nenhum.
+semantico = [
+    "fastembed>=0.4",
+]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
@@ -38,6 +43,7 @@ dev = [
     "mypy>=1.10",
     "types-pyyaml>=6.0",
     "types-python-dateutil>=2.9",
+    "fastembed>=0.4",
 ]
 
 [project.scripts]

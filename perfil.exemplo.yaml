@@ -52,8 +52,14 @@ palavras_chave:
 restricoes:
   ufs: ["GO", "DF"]
   modalidades: [6, 8, 4]          # pregão eletrônico, dispensa, concorrência eletrônica
-  valor_minimo: 50000
-  dias_minimos_ate_encerramento: 3   # não avise do que já não dá tempo de montar proposta
+
+  # Cuidado com este número. Numa amostra real de Goiás, a maioria das
+  # dispensas ficou entre R$ 900 e R$ 13 mil — um mínimo de 50 mil elimina
+  # quase toda a modalidade 8, que é justamente onde a empresa pequena ganha.
+  # Comece baixo e vá subindo conforme o ruído incomodar.
+  valor_minimo: 10000
+
+  dias_minimos_ate_encerramento: 2   # não avise do que já não dá tempo de montar proposta
 
 pontuacao:
   peso_lexical: 0.35

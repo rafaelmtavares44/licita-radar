@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from licita_radar.config.perfil import Perfil
 from licita_radar.config.settings import Settings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pncp"
@@ -42,6 +43,18 @@ def settings_teste(tmp_path: Path) -> Settings:
 
 
 @pytest.fixture
+def amostra_real() -> dict[str, Any]:
+    """12 contratações reais do PNCP (GO, 04/09/2026). Dado público."""
+    return carregar_fixture("amostra_real_go.json")
+
+
+@pytest.fixture
+def perfil(perfil_valido: dict[str, Any]) -> Perfil:
+    """O perfil de exemplo já validado, pronto para o matching."""
+    return Perfil.model_validate(perfil_valido)
+
+
+@pytest.fixture
 def perfil_valido() -> dict[str, Any]:
     return {
         "id": "acme-software",
@@ -53,9 +66,22 @@ def perfil_valido() -> dict[str, Any]:
         "cnaes": ["6201-5/01"],
         "palavras_chave": {
             "positivas": ["desenvolvimento de software", "sustentação de sistemas"],
-            "negativas": ["toner", "cabeamento estruturado"],
+            "negativas": [
+                "toner",
+                "cabeamento estruturado",
+                "impressora",
+                "material de informatica",
+                "materiais de informatica",
+                "vigilancia",
+                "picole",
+            ],
         },
-        "restricoes": {"ufs": ["go"], "modalidades": [6, 8], "valor_minimo": 50000},
+        "restricoes": {
+            "ufs": ["go"],
+            "modalidades": [6, 8],
+            "valor_minimo": 50000,
+            "dias_minimos_ate_encerramento": 3,
+        },
         "pontuacao": {"peso_lexical": 0.35, "peso_semantico": 0.65, "limiar_alerta": 0.72},
         "canais": [{"tipo": "telegram", "chat_id": "${TELEGRAM_CHAT_ID}"}],
     }

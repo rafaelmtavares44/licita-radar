@@ -3,7 +3,7 @@
 **Um radar de licitações públicas.** Ele lê o [PNCP](https://pncp.gov.br) todo dia, entende o que a sua empresa vende e avisa só quando aparece algo que vale a pena disputar.
 
 > [!WARNING]
-> Em construção. A v0.1 ainda não está publicada — hoje o projeto tem a ingestão do PNCP funcionando (M1). O roadmap abaixo diz o que falta.
+> Em construção. A v0.1 ainda não está publicada — hoje o projeto coleta do PNCP (M1) e pontua contra o seu perfil (M2). O roadmap abaixo diz o que falta.
 
 ---
 
@@ -56,9 +56,38 @@ licita-radar listar
 | `licita-radar migrar` | Cria ou atualiza o esquema do banco |
 | `licita-radar perfil` | Valida o `perfil.yaml` e mostra como ele foi lido |
 | `licita-radar ingest` | Busca contratações no PNCP e grava. `--seco` mostra sem gravar |
-| `licita-radar listar` | Mostra o que ainda tem proposta aberta |
+| `licita-radar listar` | Mostra o que está guardado, com proposta ainda aberta |
+| `licita-radar match` | Pontua tudo contra o seu perfil e mostra o funil |
 
 `licita-radar ingest --historico --dias 30` faz backfill por data de publicação, em vez de buscar só o que está com proposta aberta.
+
+### Calibrando sem baixar modelo
+
+```bash
+licita-radar match --sem-semantica
+```
+
+Roda só a camada léxica. Não baixa nada, responde em milissegundos, e é o
+jeito certo de ajustar as palavras-chave do perfil antes de ligar a
+semântica. A saída mostra o funil inteiro:
+
+```
+O funil
+  não passou nos filtros           9  ███████████████
+  vetada por palavra negativa      0
+  abaixo do limiar                 3  █████
+  candidata — merece o seu olho    0
+```
+
+Para ligar a camada semântica:
+
+```bash
+pip install -e ".[semantico]"    # ~200 MB, sem PyTorch
+licita-radar match
+```
+
+O modelo (`paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensões) é baixado
+na primeira execução e fica em cache.
 
 ---
 
@@ -95,6 +124,10 @@ A [API de consultas](https://pncp.gov.br/api/consulta/swagger-ui/index.html) é 
 | 9 | Inexigibilidade |
 | 12 | Credenciamento |
 
+**A dispensa domina o volume, e ela é barata.** Numa amostra real de Goiás, 36 das 37 contratações abertas eram dispensa (modalidade 8), com valores entre R$ 900 e R$ 13 mil. Um `valor_minimo` de 50 mil no perfil elimina praticamente toda a modalidade — justamente aquela em que a empresa pequena tem chance.
+
+**O objeto vem coberto de casca burocrática.** `DESPESA REFERENTE A`, `SOLICITAÇÃO DE`, `1 -TERMO DE SOLICITAÇÃO`, `[Portal de Compras Públicas] - DISPENSA -`. Esse prefixo é idêntico em licitação de software e de picolé; o projeto remove antes de comparar, senão a busca semântica aproxima coisas que não têm nada a ver.
+
 **Não há limite de requisições documentado.** O cliente trata como se houvesse: concorrência baixa, backoff exponencial e cache local opcional durante o desenvolvimento (`LR_PNCP_CACHE_LOCAL=true`).
 
 ---
@@ -105,7 +138,7 @@ A [API de consultas](https://pncp.gov.br/api/consulta/swagger-ui/index.html) é 
 |---|---|---|
 | M0 | Fundação: repositório, CI, banco | ✅ |
 | M1 | Ingestão do PNCP | ✅ |
-| M2 | Funil de matching (léxico + semântico) | ⬜ |
+| M2 | Funil de matching (léxico + semântico) | ✅ |
 | M3 | Grafo LangGraph com checkpoint | ⬜ |
 | M4 | Aprovação humana e alerta no Telegram | ⬜ |
 | M5 | Acabamento e release `v0.1.0` | ⬜ |
@@ -124,7 +157,7 @@ mypy
 
 Os testes usam [respx](https://lundberg.github.io/respx/) para interceptar o HTTP. Um CI que depende de um serviço externo estar no ar é um CI que quebra sozinho.
 
-> As fixtures em `tests/fixtures/pncp/` são **sintéticas** — seguem a estrutura documentada, mas foram escritas à mão. Para substituir por respostas reais: `LR_PNCP_CACHE_LOCAL=true licita-radar ingest --seco` grava o que a API devolveu em `.cache_pncp/`.
+> `tests/fixtures/pncp/amostra_real_go.json` traz **12 contratações reais** de Goiás, capturadas em 04/09/2026 — é contra elas que o matching é testado. Para capturar as suas: `LR_PNCP_CACHE_LOCAL=true licita-radar ingest --seco` grava o que a API devolveu em `.cache_pncp/`.
 
 ## Licença
 
