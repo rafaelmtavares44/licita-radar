@@ -103,16 +103,37 @@ class MatchingRepo:
         self._banco = banco
 
     async def carregar_contratacoes(
-        self, *, numeros: Sequence[str] | None = None, uf: str | None = None, limite: int = 500
+        self,
+        *,
+        numeros: Sequence[str] | None = None,
+        uf: str | None = None,
+        limite: int = 500,
+        por_score_do_perfil: str | None = None,
     ) -> list[Contratacao]:
-        sql = """
-            SELECT numero_controle_pncp, modalidade_codigo, objeto, orgao_cnpj, orgao_nome,
-                   esfera, uf, municipio, valor_estimado, data_publicacao, abertura_proposta,
-                   encerramento_proposta, payload
-              FROM contratacao
-             WHERE (%(numeros)s::text[] IS NULL OR numero_controle_pncp = ANY(%(numeros)s::text[]))
-               AND (%(uf)s::text IS NULL OR uf = %(uf)s::text)
-             ORDER BY encerramento_proposta ASC NULLS LAST
+        """Carrega contratações para avaliar.
+
+        `por_score_do_perfil` muda a ordem de "quem encerra primeiro" para
+        "quem pontuou melhor". A diferença importa quando há limite: com um
+        `--limite 20` sobre a ordem de prazo, as vinte primeiras a encerrar
+        raramente são as vinte mais aderentes, e a execução não acha nada.
+        """
+        ordem = (
+            "COALESCE(a.score_final, 0) DESC, c.encerramento_proposta ASC NULLS LAST"
+            if por_score_do_perfil
+            else "c.encerramento_proposta ASC NULLS LAST"
+        )
+        sql = f"""
+            SELECT c.numero_controle_pncp, c.modalidade_codigo, c.objeto, c.orgao_cnpj,
+                   c.orgao_nome, c.esfera, c.uf, c.municipio, c.valor_estimado,
+                   c.data_publicacao, c.abertura_proposta, c.encerramento_proposta, c.payload
+              FROM contratacao c
+              LEFT JOIN avaliacao a
+                     ON a.numero_controle_pncp = c.numero_controle_pncp
+                    AND a.perfil_id = %(perfil)s
+             WHERE (%(numeros)s::text[] IS NULL
+                    OR c.numero_controle_pncp = ANY(%(numeros)s::text[]))
+               AND (%(uf)s::text IS NULL OR c.uf = %(uf)s::text)
+             ORDER BY {ordem}
              LIMIT %(limite)s
         """
         async with (
@@ -125,6 +146,7 @@ class MatchingRepo:
                     "numeros": list(numeros) if numeros is not None else None,
                     "uf": uf,
                     "limite": limite,
+                    "perfil": por_score_do_perfil,
                 },
             )
             linhas = await cur.fetchall()

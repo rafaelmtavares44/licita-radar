@@ -244,6 +244,54 @@ async def checar_postgres(settings: Settings) -> list[Checagem]:
     return resultado
 
 
+async def checar_llm(settings: Settings) -> Checagem:
+    """Testa a chave com a menor requisição possível.
+
+    Verificar só se a variável está preenchida não serve de nada: chave
+    errada, cota estourada e URL trocada dão todas o mesmo "configurado".
+    """
+    from licita_radar.llm import construir_llm
+
+    llm = construir_llm(
+        base_url=settings.llm_base_url,
+        modelo=settings.llm_modelo,
+        api_key=settings.llm_api_key,
+        timeout_s=min(settings.llm_timeout_s, 20.0),
+    )
+
+    if not llm.ativo:
+        return Checagem(
+            "LLM",
+            "configurado",
+            Estado.AVISO,
+            "nenhum",
+            "opcional: sem LLM, a justificativa é heurística e tudo funciona",
+        )
+
+    inicio = time.monotonic()
+    try:
+        resposta = await llm.responder(
+            sistema="Responda apenas com a palavra: ok",
+            usuario="Diga ok.",
+            max_tokens=5,
+        )
+    except Exception as erro:  # a mensagem do provedor é a informação útil
+        detalhe = str(erro)
+        dica = "confira LR_LLM_API_KEY e LR_LLM_BASE_URL no .env"
+        if "401" in detalhe or "invalid_api_key" in detalhe:
+            dica = "a chave foi recusada — gere outra em console.groq.com"
+        elif "429" in detalhe:
+            dica = "cota diária esgotada; tente amanhã ou troque de modelo"
+        elif "404" in detalhe:
+            dica = f"o modelo '{settings.llm_modelo}' não existe nesse provedor"
+        return Checagem("LLM", settings.llm_modelo or "?", Estado.FALHA, detalhe[:80], dica)
+
+    ms = (time.monotonic() - inicio) * 1000
+    return Checagem(
+        "LLM", resposta.modelo, Estado.OK, f"respondeu em {ms:.0f} ms · {resposta.tokens} tokens"
+    )
+
+
 # ------------------------------------------------------------------ PNCP
 
 
@@ -313,6 +361,8 @@ async def diagnosticar(settings: Settings, *, com_pncp: bool = True) -> list[Che
             Checagem("Banco", "extensão vector", Estado.PULADO),
             Checagem("Banco", "migrações aplicadas", Estado.PULADO),
         ]
+
+    checagens.append(await checar_llm(settings))
 
     if com_pncp:
         checagens.append(await checar_pncp(settings))

@@ -265,13 +265,20 @@ def cmd_radar(
 
     async def _executar() -> None:
         async with Banco() as banco:
-            contratacoes = await MatchingRepo(banco).carregar_contratacoes(uf=uf, limite=limite)
+            # as mais promissoras primeiro: com limite, ordenar por prazo faz
+            # o grafo gastar as vagas nas que encerram cedo, não nas melhores
+            contratacoes = await MatchingRepo(banco).carregar_contratacoes(
+                uf=uf, limite=limite, por_score_do_perfil=perfil.id
+            )
 
         if not contratacoes:
             console.print("[dim]nada no banco — rode `licita-radar ingest` antes[/dim]")
             return
 
-        console.print(f"[dim]passando {len(contratacoes)} contratações pelo grafo[/dim]")
+        console.print(
+            f"[dim]passando {len(contratacoes)} contratações pelo grafo, "
+            f"as de maior score primeiro[/dim]"
+        )
         async with abrir_radar(perfil) as grafo:
             execucoes = await processar(grafo, contratacoes, perfil)
 

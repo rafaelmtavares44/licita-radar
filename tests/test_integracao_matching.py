@@ -221,6 +221,37 @@ async def test_resumo_do_funil_conta_por_veredito(banco: Banco, perfil: Perfil) 
 
 
 @sem_banco
+async def test_carregar_por_score_traz_as_melhores_primeiro(banco: Banco, perfil: Perfil) -> None:
+    """Com limite, a ordem decide o que o grafo vê.
+
+    Ordenar por prazo gasta as vagas nas que encerram cedo — que raramente
+    são as mais aderentes. Foi o que fez um `--limite 20` real não achar
+    nenhuma candidata, sendo que havia seis no lote completo.
+    """
+    ruim = _contratacao("ORD-1-1/2026", "Aquisição de adubos")
+    boa = _contratacao("ORD-1-2/2026", "Desenvolvimento de software e sustentação de sistemas")
+    # a ruim encerra antes: pela ordem de prazo, ela viria primeiro
+    ruim = ruim.model_copy(update={"encerramento_proposta": datetime.now(UTC) + timedelta(days=1)})
+    boa = boa.model_copy(update={"encerramento_proposta": datetime.now(UTC) + timedelta(days=30)})
+    await ContratacaoRepo(banco).salvar_muitas([ruim, boa])
+
+    await AvaliacaoRepo(banco).salvar_muitas(
+        [
+            avaliar(ruim, perfil, score_semantico=0.02),
+            avaliar(boa, perfil, score_semantico=0.90),
+        ],
+        perfil_id=perfil.id,
+    )
+
+    matching = MatchingRepo(banco)
+    por_prazo = await matching.carregar_contratacoes(limite=1)
+    por_score = await matching.carregar_contratacoes(limite=1, por_score_do_perfil=perfil.id)
+
+    assert por_prazo[0].numero_controle_pncp == "ORD-1-1/2026"
+    assert por_score[0].numero_controle_pncp == "ORD-1-2/2026"
+
+
+@sem_banco
 async def test_carregar_contratacoes_filtra_por_uf(banco: Banco) -> None:
     goias = _contratacao("E-1-1/2026", "Desenvolvimento de sistema")
     outra = Contratacao(
