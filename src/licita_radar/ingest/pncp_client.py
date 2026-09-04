@@ -13,9 +13,11 @@ Dois endpoints sustentam a v0.1:
     Janela de datas de publicação. Serve para o backfill inicial e para
     gravar fixtures de teste.
 
-O PNCP não documenta limite de requisições. Isso não é permissão para
-martelar o servidor: tratamos como se houvesse, com concorrência baixa e
-backoff exponencial.
+O manual do PNCP não documenta limite de requisições — mas ele existe. Uma
+varredura nacional levou 429 a partir da página 16 e as modalidades
+seguintes já nasceram bloqueadas: o limite é por cliente, não por rota.
+Por isso, além do backoff por tentativa, há um `Freio` que espaça todas as
+chamadas e aperta sozinho quando o servidor reclama.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from tenacity import (
 )
 
 from licita_radar.config.settings import Settings, get_settings
+from licita_radar.ingest.freio import Freio, ler_retry_after
 from licita_radar.ingest.modelos import Contratacao, PaginaPNCP
 from licita_radar.ingest.normalizar import normalizar_pagina
 
@@ -47,6 +50,10 @@ logger = logging.getLogger(__name__)
 #: Códigos em que insistir faz sentido. 4xx (fora 429) é erro nosso —
 #: repetir só gasta o tempo de todo mundo.
 _STATUS_RETENTAVEIS = frozenset({429, 500, 502, 503, 504})
+
+#: 429 merece mais paciência que os outros: não é falha, é o servidor
+#: pedindo para diminuir o ritmo.
+_TENTATIVAS_EXTRA_NO_429 = 4
 
 
 class ErroPNCP(RuntimeError):
@@ -66,7 +73,12 @@ def _aaaammdd(dia: date) -> str:
 class PNCPClient:
     """Fala HTTP com o PNCP. Não sabe o que é perfil, score ou alerta."""
 
-    def __init__(self, settings: Settings | None = None, cliente: httpx.AsyncClient | None = None):
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        cliente: httpx.AsyncClient | None = None,
+        freio: Freio | None = None,
+    ):
         self._s = settings or get_settings()
         self._cliente = cliente or httpx.AsyncClient(
             base_url=self._s.pncp_base_url,
@@ -78,6 +90,10 @@ class PNCPClient:
         )
         self._proprio_cliente = cliente is None
         self._semaforo = asyncio.Semaphore(self._s.pncp_concorrencia)
+        self._freio = freio or Freio(
+            intervalo_inicial_s=self._s.pncp_intervalo_min_s,
+            intervalo_maximo_s=self._s.pncp_intervalo_max_s,
+        )
 
     async def __aenter__(self) -> Self:
         return self
@@ -110,19 +126,33 @@ class PNCPClient:
             dados: dict[str, Any] = json.loads(cache.read_text(encoding="utf-8"))
             return dados
 
+        tentativas = self._s.pncp_max_tentativas + _TENTATIVAS_EXTRA_NO_429
+
         async with self._semaforo:
             async for tentativa in AsyncRetrying(
-                stop=stop_after_attempt(self._s.pncp_max_tentativas),
-                wait=wait_exponential_jitter(initial=1, max=30),
+                stop=stop_after_attempt(tentativas),
+                wait=wait_exponential_jitter(initial=1, max=60),
                 retry=retry_if_exception(_vale_retentar),
                 reraise=True,
             ):
                 with tentativa:
+                    # o freio espaça as chamadas e segura mais quando apertado
+                    await self._freio.aguardar()
                     resposta = await self._cliente.get(rota, params=params)
+
+                    if resposta.status_code == httpx.codes.TOO_MANY_REQUESTS:
+                        await self._freio.penalizar(
+                            ler_retry_after(resposta.headers.get("Retry-After"))
+                        )
+                        resposta.raise_for_status()
+
                     # 204 = sem conteúdo para os filtros dados. Não é erro.
                     if resposta.status_code == httpx.codes.NO_CONTENT:
+                        self._freio.registrar_sucesso()
                         return {"data": [], "paginasRestantes": 0, "empty": True}
+
                     resposta.raise_for_status()
+                    self._freio.registrar_sucesso()
                     corpo: dict[str, Any] = resposta.json()
 
         if cache:
@@ -220,7 +250,15 @@ async def coletar(
     """
     encontradas: dict[str, Contratacao] = {}
 
-    async with PNCPClient(settings) as cliente:
+    # Um freio só para a varredura inteira: o limite do PNCP é por cliente,
+    # então a modalidade seguinte precisa herdar o ritmo que a anterior
+    # aprendeu — senão ela começa levando 429 na primeira página.
+    s = settings or get_settings()
+    freio = Freio(
+        intervalo_inicial_s=s.pncp_intervalo_min_s, intervalo_maximo_s=s.pncp_intervalo_max_s
+    )
+
+    async with PNCPClient(settings, freio=freio) as cliente:
         for modalidade in modalidades:
             try:
                 if apenas_abertas:

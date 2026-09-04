@@ -175,7 +175,7 @@ A [API de consultas](https://pncp.gov.br/api/consulta/swagger-ui/index.html) é 
 
 **No Windows, o psycopg exige trocar o event loop.** O `asyncio.run()` de lá usa o `ProactorEventLoop`, incompatível com o psycopg assíncrono: a conexão falha com `InterfaceError` antes de tocar a rede, e o sintoma parece problema de rede. A CLI troca a política na importação; se você usar o pacote como biblioteca, faça o mesmo.
 
-**Não há limite de requisições documentado.** O cliente trata como se houvesse: concorrência baixa, backoff exponencial e cache local opcional durante o desenvolvimento (`LR_PNCP_CACHE_LOCAL=true`).
+**Há limite de requisições, e ele não está documentado.** Uma varredura nacional levou `429 Too Many Requests` a partir da página 16 — e, pior, a modalidade seguinte já começou bloqueada: o limite é por cliente, não por rota. O projeto responde com um freio adaptativo que espaça todas as chamadas, dobra o espaçamento a cada 429 e o reduz conforme as respostas voltam a passar. Também honra o cabeçalho `Retry-After` quando o servidor manda um.
 
 ---
 

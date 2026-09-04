@@ -34,7 +34,13 @@ class Settings(BaseSettings):
     pncp_base_url: str = "https://pncp.gov.br/api/consulta"
     pncp_timeout_s: float = 30.0
     pncp_max_tentativas: int = Field(default=5, ge=1, le=10)
-    pncp_concorrencia: int = Field(default=3, ge=1, le=10)
+    #: Duas chamadas simultâneas já bastam, e o PNCP agradece. Com três, uma
+    #: varredura nacional levou 429 a partir da página 16.
+    pncp_concorrencia: int = Field(default=2, ge=1, le=10)
+
+    #: Intervalo mínimo entre chamadas. Dobra a cada 429 e volta devagar.
+    pncp_intervalo_min_s: float = Field(default=0.2, ge=0.0, le=10.0)
+    pncp_intervalo_max_s: float = Field(default=8.0, ge=0.5, le=60.0)
     pncp_tamanho_pagina: int = Field(default=50, ge=10, le=500)
     pncp_cache_local: bool = False
     pncp_cache_dir: Path = Path(".cache_pncp")
