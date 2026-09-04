@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     pncp_cache_local: bool = False
     pncp_cache_dir: Path = Path(".cache_pncp")
 
+    # --- LLM (opcional) ---
+    # Protocolo da OpenAI: serve OpenAI, Groq, Ollama, OpenRouter, LM Studio.
+    # Sem base_url e modelo, o projeto usa a justificativa heurística e roda
+    # de ponta a ponta sem nenhuma chave.
+    llm_base_url: str | None = None
+    llm_modelo: str | None = None
+    llm_api_key: str | None = None
+    llm_timeout_s: float = 60.0
+
     # --- perfil ---
     perfil_path: Path = Path("perfil.yaml")
 

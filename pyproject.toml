@@ -34,6 +34,10 @@ dependencies = [
 semantico = [
     "fastembed>=0.4",
 ]
+grafo = [
+    "langgraph>=1.0",
+    "langgraph-checkpoint-postgres>=3.0",
+]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
@@ -44,6 +48,8 @@ dev = [
     "types-pyyaml>=6.0",
     "types-python-dateutil>=2.9",
     "fastembed>=0.4",
+    "langgraph>=1.0",
+    "langgraph-checkpoint-postgres>=3.0",
 ]
 
 [project.scripts]
@@ -94,6 +100,20 @@ disallow_untyped_decorators = false   # typer usa decorators sem tipo
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disallow_untyped_defs = false
+
+# O StateGraph do LangGraph é genérico em quatro parâmetros e sobrecarregado
+# em add_node; sob --strict, mypy exige anotações que não acrescentam
+# segurança nenhuma e poluem o código do grafo. A correção do estado é
+# garantida pelo EditalState e pelos testes de fluxo.
+[[tool.mypy.overrides]]
+module = ["licita_radar.graph.build"]
+# add_node do LangGraph é sobrecarregado sobre um TypeVar ligado a
+# TypedDictLikeV1/V2, e o mypy não casa um TypedDict total=False com ele.
+# As funções dos nós continuam totalmente tipadas; o que se desliga aqui é
+# só a resolução da sobrecarga desta biblioteca.
+disable_error_code = ["call-overload"]
+disallow_any_generics = false
+warn_return_any = false
 
 # ---------------------------------------------------------------------------
 

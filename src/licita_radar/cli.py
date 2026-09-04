@@ -18,6 +18,8 @@ from licita_radar.config.perfil import ErroDePerfil, Perfil, carregar_perfil
 from licita_radar.config.settings import get_settings
 from licita_radar.diagnostico import Estado
 from licita_radar.diagnostico import executar as executar_diagnostico
+from licita_radar.graph.build import configuracao
+from licita_radar.graph.runner import abrir_radar, pendentes, processar, responder
 from licita_radar.ingest.modalidades import rotular
 from licita_radar.ingest.pncp_client import coletar
 from licita_radar.matching.calibragem import sugerir_limiar
@@ -249,6 +251,111 @@ def cmd_listar(
             _moeda(linha["valor_estimado"]),
         )
     console.print(tabela)
+
+
+@app.command("radar")
+def cmd_radar(
+    uf: Annotated[str | None, typer.Option("--uf")] = None,
+    limite: Annotated[int, typer.Option("--limite", "-n", help="Quantas processar")] = 200,
+    caminho_perfil: Annotated[Path | None, typer.Option("--perfil", "-p")] = None,
+) -> None:
+    """Passa as contratações pelo grafo, até a revisão humana."""
+    _configurar_log()
+    perfil = _carregar_ou_sair(caminho_perfil or get_settings().perfil_path)
+
+    async def _executar() -> None:
+        async with Banco() as banco:
+            contratacoes = await MatchingRepo(banco).carregar_contratacoes(uf=uf, limite=limite)
+
+        if not contratacoes:
+            console.print("[dim]nada no banco — rode `licita-radar ingest` antes[/dim]")
+            return
+
+        console.print(f"[dim]passando {len(contratacoes)} contratações pelo grafo[/dim]")
+        async with abrir_radar(perfil) as grafo:
+            execucoes = await processar(grafo, contratacoes, perfil)
+
+        aguardando = [e for e in execucoes if e.aguardando]
+        tokens = sum(e.tokens for e in execucoes)
+
+        contagem = Counter(e.situacao for e in execucoes)
+        tabela = Table(title="O grafo", header_style="bold", title_justify="left")
+        tabela.add_column("situação")
+        tabela.add_column("qtd", justify="right")
+        for situacao, qtd in contagem.most_common():
+            tabela.add_row(situacao, str(qtd))
+        console.print(tabela)
+
+        if tokens:
+            console.print(f"[dim]{tokens} tokens gastos nesta execução[/dim]")
+
+        if aguardando:
+            console.print(
+                f"\n[bold green]{len(aguardando)}[/bold green] esperando a sua decisão — "
+                f"rode [bold]licita-radar revisar[/bold]"
+            )
+        else:
+            console.print("\n[dim]nenhuma chegou à revisão desta vez[/dim]")
+
+    _rodar(_executar())
+
+
+@app.command("revisar")
+def cmd_revisar(
+    limite: Annotated[int, typer.Option("--limite", "-n")] = 10,
+    caminho_perfil: Annotated[Path | None, typer.Option("--perfil", "-p")] = None,
+) -> None:
+    """Mostra o que está esperando decisão e retoma o grafo com a resposta."""
+    _configurar_log()
+    perfil = _carregar_ou_sair(caminho_perfil or get_settings().perfil_path)
+
+    async def _executar() -> None:
+        async with Banco() as banco:
+            candidatas = await AvaliacaoRepo(banco).ranking(
+                perfil_id=perfil.id, limite=limite, apenas_candidatas=True
+            )
+            numeros = [str(linha["numero_controle_pncp"]) for linha in candidatas]
+            contratacoes = await MatchingRepo(banco).carregar_contratacoes(numeros=numeros)
+
+        if not contratacoes:
+            console.print("[dim]nada para revisar — rode `licita-radar radar` antes[/dim]")
+            return
+
+        por_numero = {c.numero_controle_pncp: c for c in contratacoes}
+
+        async with abrir_radar(perfil) as grafo:
+            parados = await pendentes(grafo, list(por_numero))
+            if not parados:
+                console.print("[dim]nenhuma thread parada esperando decisão[/dim]")
+                return
+
+            for numero in parados:
+                contratacao = por_numero[numero]
+                estado = (await grafo.aget_state(configuracao(numero))).values
+
+                console.print()
+                console.rule(f"[bold]{numero}[/bold]", align="left")
+                console.print(f"[bold]{limpar_objeto(contratacao.objeto)[:400]}[/bold]")
+                console.print(
+                    f"[dim]{contratacao.orgao_nome or '—'} · {contratacao.uf or '—'} · "
+                    f"{_moeda(contratacao.valor_estimado)}[/dim]"
+                )
+                if estado.get("justificativa"):
+                    console.print(f"[green]{estado['justificativa']}[/green]")
+                if contratacao.url_pncp:
+                    console.print(f"[dim]{contratacao.url_pncp}[/dim]")
+
+                escolha = typer.prompt("  [a]provar / [r]ejeitar / [p]ular", default="p")
+                if escolha.lower().startswith("p"):
+                    continue
+
+                aprovar = escolha.lower().startswith("a")
+                comentario = typer.prompt("  comentário (enter para pular)", default="") or None
+                final = await responder(grafo, numero, aprovar=aprovar, comentario=comentario)
+                cor = "green" if aprovar else "yellow"
+                console.print(f"  [{cor}]{final.get('situacao')}[/{cor}]")
+
+    _rodar(_executar())
 
 
 @app.command("doctor")
