@@ -25,6 +25,7 @@ def _contratacao(**ajustes: Any) -> Contratacao:
         "uf": "GO",
         "valor_estimado": Decimal("200000.00"),
         "encerramento_proposta": datetime.now(UTC) + timedelta(days=20),
+        "esfera": "M",
         "payload": {},
     }
     return Contratacao(**{**base, **ajustes})
@@ -246,3 +247,28 @@ class TestContraAAmostraReal:
         ]
 
         assert candidatas == []
+
+
+class TestEsfera:
+    """Filtrar por esfera é o "quero só o governo federal"."""
+
+    def test_esfera_vazia_no_perfil_aceita_todas(self, perfil: Perfil) -> None:
+        for esfera in ("F", "E", "M", None):
+            assert avaliar_elegibilidade(_contratacao(esfera=esfera), perfil) is None
+
+    def test_so_federal_barra_municipal(self, perfil_valido: dict[str, Any]) -> None:
+        perfil_valido["restricoes"]["esferas"] = ["F"]
+        so_federal = Perfil.model_validate(perfil_valido)
+
+        assert avaliar_elegibilidade(_contratacao(esfera="F"), so_federal) is None
+
+        motivo = avaliar_elegibilidade(_contratacao(esfera="M"), so_federal)
+        assert motivo is not None
+        assert "Municipal" in motivo
+
+    def test_esfera_ausente_no_dado_nao_reprova(self, perfil_valido: dict[str, Any]) -> None:
+        """Órgão sem esferaId no payload não pode ser descartado por isso."""
+        perfil_valido["restricoes"]["esferas"] = ["F"]
+        so_federal = Perfil.model_validate(perfil_valido)
+
+        assert avaliar_elegibilidade(_contratacao(esfera=None), so_federal) is None

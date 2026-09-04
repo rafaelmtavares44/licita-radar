@@ -50,7 +50,12 @@ palavras_chave:
     - locação de veículo
 
 restricoes:
+  # Vazio = o Brasil inteiro. Liste siglas para restringir.
   ufs: ["GO", "DF"]
+
+  # Vazio = todas as esferas. ["F"] traz só o governo federal;
+  # ["M"] só prefeituras — que é onde a dispensa de pequeno valor mora.
+  esferas: []
   modalidades: [6, 8, 4]          # pregão eletrônico, dispensa, concorrência eletrônica
 
   # Comece em zero e suba só quando o ruído incomodar. Numa amostra real de

@@ -118,6 +118,7 @@ def normalizar_contratacao(bruto: dict[str, Any]) -> Contratacao | None:
         objeto=objeto,
         orgao_cnpj=orgao.get("cnpj"),
         orgao_nome=limpar_texto(orgao.get("razaoSocial")) or None,
+        esfera=orgao.get("esferaId"),
         uf=unidade.get("ufSigla"),
         municipio=unidade.get("municipioNome"),
         valor_estimado=para_decimal(bruto.get("valorTotalEstimado")),

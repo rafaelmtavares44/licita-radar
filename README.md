@@ -87,7 +87,22 @@ problema com a instrução do conserto.
 | `licita-radar match` | Pontua tudo contra o seu perfil e mostra o funil |
 | `licita-radar doctor` | Diagnostica o ambiente quando algo não funciona |
 
-`licita-radar ingest --historico --dias 30` faz backfill por data de publicação, em vez de buscar só o que está com proposta aberta.
+### Onde procurar
+
+```bash
+licita-radar ingest --uf GO          # uma UF
+licita-radar ingest --brasil         # o país inteiro (leva alguns minutos)
+licita-radar ingest --ate 90         # propostas que encerram nos próximos 90 dias
+licita-radar ingest --historico --dias 30   # backfill por data de publicação
+```
+
+Para filtrar por esfera de governo, use o perfil:
+
+```yaml
+restricoes:
+  ufs: []              # vazio = Brasil inteiro
+  esferas: ["F"]       # só o governo federal — E estadual, M municipal
+```
 
 ### Calibrando sem baixar modelo
 
@@ -151,6 +166,8 @@ A [API de consultas](https://pncp.gov.br/api/consulta/swagger-ui/index.html) é 
 | 4 | Concorrência — Eletrônica |
 | 9 | Inexigibilidade |
 | 12 | Credenciamento |
+
+**O `dataFinal` do endpoint de propostas abertas é o fim do prazo, não "até quando olhar".** Passar a data de hoje devolve o que encerra hoje — ou seja, quase tudo já fechado. Numa coleta real, 31 de 37 contratações vieram com prazo vencido por causa disso. A data precisa estar no futuro: é o que a opção `--ate` controla.
 
 **A dispensa domina o volume, e ela é barata.** Numa amostra real de Goiás, 36 das 37 contratações abertas eram dispensa (modalidade 8), com valores entre R$ 900 e R$ 13 mil. Um `valor_minimo` de 50 mil no perfil elimina praticamente toda a modalidade — justamente aquela em que a empresa pequena tem chance.
 

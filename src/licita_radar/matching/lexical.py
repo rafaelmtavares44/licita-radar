@@ -53,6 +53,12 @@ def avaliar_elegibilidade(
     if r.ufs and contratacao.uf and contratacao.uf.upper() not in r.ufs:
         return f"fora das UFs do perfil (é {contratacao.uf})"
 
+    if r.esferas and contratacao.esfera and contratacao.esfera.upper() not in r.esferas:
+        from licita_radar.config.perfil import ESFERAS
+
+        nome = ESFERAS.get(contratacao.esfera.upper(), contratacao.esfera)
+        return f"esfera fora do perfil (é {nome})"
+
     if r.modalidades and contratacao.modalidade_codigo not in r.modalidades:
         return f"modalidade {contratacao.modalidade_codigo} não está no perfil"
 

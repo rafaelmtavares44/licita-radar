@@ -90,7 +90,7 @@ class MatchingRepo:
     ) -> list[Contratacao]:
         sql = """
             SELECT numero_controle_pncp, modalidade_codigo, objeto, orgao_cnpj, orgao_nome,
-                   uf, municipio, valor_estimado, data_publicacao, abertura_proposta,
+                   esfera, uf, municipio, valor_estimado, data_publicacao, abertura_proposta,
                    encerramento_proposta, payload
               FROM contratacao
              WHERE (%(numeros)s::text[] IS NULL OR numero_controle_pncp = ANY(%(numeros)s::text[]))
@@ -119,6 +119,7 @@ class MatchingRepo:
                 objeto=linha["objeto"],
                 orgao_cnpj=linha["orgao_cnpj"],
                 orgao_nome=linha["orgao_nome"],
+                esfera=linha["esfera"],
                 uf=linha["uf"],
                 municipio=linha["municipio"],
                 valor_estimado=linha["valor_estimado"],

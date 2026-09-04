@@ -89,6 +89,12 @@ class TestErrosExplicaveis:
         with pytest.raises(ErroDePerfil, match="duas letras"):
             carregar_perfil(_escrever(tmp_path, perfil_valido))
 
+    def test_esfera_inexistente(self, tmp_path: Path, perfil_valido: dict[str, Any]) -> None:
+        perfil_valido["restricoes"]["esferas"] = ["X"]
+
+        with pytest.raises(ErroDePerfil, match="Federal"):
+            carregar_perfil(_escrever(tmp_path, perfil_valido))
+
     def test_modalidade_inexistente(self, tmp_path: Path, perfil_valido: dict[str, Any]) -> None:
         perfil_valido["restricoes"]["modalidades"] = [6, 99]
 

@@ -24,6 +24,8 @@ class Contratacao(BaseModel):
     objeto: str
     orgao_cnpj: str | None = None
     orgao_nome: str | None = None
+    #: "F" federal, "E" estadual, "M" municipal — vem de orgaoEntidade.esferaId
+    esfera: str | None = None
     uf: str | None = None
     municipio: str | None = None
     valor_estimado: Decimal | None = None

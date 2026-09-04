@@ -124,7 +124,18 @@ def cmd_perfil(
 @app.command("ingest")
 def cmd_ingest(
     uf: Annotated[str | None, typer.Option("--uf", help="Sigla, ex.: GO")] = None,
+    brasil: Annotated[
+        bool,
+        typer.Option("--brasil", help="Ignora as UFs do perfil e varre o país inteiro"),
+    ] = False,
     dias: Annotated[int, typer.Option("--dias", help="Janela para trás, no backfill")] = 7,
+    ate: Annotated[
+        int,
+        typer.Option(
+            "--ate",
+            help="Quantos dias à frente procurar propostas que ainda vão encerrar",
+        ),
+    ] = 60,
     historico: Annotated[
         bool,
         typer.Option(
@@ -145,18 +156,32 @@ def cmd_ingest(
     hoje = date.today()
     inicio = hoje - timedelta(days=dias)
     modalidades = perfil.restricoes.modalidades
-    uf_alvo = uf or (perfil.restricoes.ufs[0] if perfil.restricoes.ufs else None)
 
-    console.print(
-        f"[dim]coletando · uf={uf_alvo or 'todas'} · modalidades={modalidades} · "
-        f"{'publicação desde ' + inicio.isoformat() if historico else 'proposta aberta'}[/dim]"
+    if brasil:
+        uf_alvo = None
+    else:
+        uf_alvo = uf or (perfil.restricoes.ufs[0] if perfil.restricoes.ufs else None)
+
+    # O endpoint /proposta filtra pelo FIM do período de recebimento. Para
+    # trazer o que ainda está aberto, a data precisa estar à frente.
+    limite_futuro = hoje + timedelta(days=ate)
+
+    janela = (
+        f"publicação desde {inicio.isoformat()}"
+        if historico
+        else f"proposta encerrando até {limite_futuro.isoformat()}"
     )
+    console.print(
+        f"[dim]coletando · uf={uf_alvo or 'BRASIL'} · modalidades={modalidades} · {janela}[/dim]"
+    )
+    if uf_alvo is None and not historico:
+        console.print("[yellow]varredura nacional: isso pode levar alguns minutos[/yellow]")
 
     async def _executar() -> None:
         contratacoes = await coletar(
             modalidades=modalidades,
             data_inicial=inicio,
-            data_final=hoje,
+            data_final=hoje if historico else limite_futuro,
             uf=uf_alvo,
             apenas_abertas=not historico,
         )

@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 _UPSERT = """
 INSERT INTO contratacao (
     numero_controle_pncp, modalidade_codigo, objeto, orgao_cnpj, orgao_nome,
-    uf, municipio, valor_estimado, data_publicacao, abertura_proposta,
+    esfera, uf, municipio, valor_estimado, data_publicacao, abertura_proposta,
     encerramento_proposta, payload
 )
 VALUES (%(numero)s, %(modalidade)s, %(objeto)s, %(orgao_cnpj)s, %(orgao_nome)s,
-        %(uf)s, %(municipio)s, %(valor)s, %(publicacao)s, %(abertura)s,
+        %(esfera)s, %(uf)s, %(municipio)s, %(valor)s, %(publicacao)s, %(abertura)s,
         %(encerramento)s, %(payload)s)
 ON CONFLICT (numero_controle_pncp) DO UPDATE SET
     objeto                = EXCLUDED.objeto,
@@ -69,6 +69,7 @@ class ContratacaoRepo:
                             "objeto": c.objeto,
                             "orgao_cnpj": c.orgao_cnpj,
                             "orgao_nome": c.orgao_nome,
+                            "esfera": c.esfera,
                             "uf": c.uf,
                             "municipio": c.municipio,
                             "valor": c.valor_estimado,

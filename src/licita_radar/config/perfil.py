@@ -41,10 +41,16 @@ class PalavrasChave(BaseModel):
         return tuple(sem_acento(p) for p in self.negativas)
 
 
+#: Como o PNCP codifica a esfera do órgão em orgaoEntidade.esferaId.
+ESFERAS = {"F": "Federal", "E": "Estadual", "M": "Municipal", "D": "Distrital"}
+
+
 class Restricoes(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     ufs: list[str] = Field(default_factory=list)
+    #: Vazio = todas. ["F"] traz só o governo federal.
+    esferas: list[str] = Field(default_factory=list)
     modalidades: list[int] = Field(default_factory=lambda: [int(m) for m in MODALIDADES_TI])
     valor_minimo: Decimal | None = None
     dias_minimos_ate_encerramento: int = Field(default=0, ge=0)
@@ -56,6 +62,15 @@ class Restricoes(BaseModel):
             if len(uf) != 2:
                 raise ValueError(f"UF inválida: {uf!r}. Use a sigla de duas letras, como 'GO'.")
         return [uf.upper() for uf in valor]
+
+    @field_validator("esferas")
+    @classmethod
+    def _esferas_conhecidas(cls, valor: list[str]) -> list[str]:
+        for esfera in valor:
+            if esfera.upper() not in ESFERAS:
+                validas = ", ".join(f"{k} ({v})" for k, v in ESFERAS.items())
+                raise ValueError(f"Esfera {esfera!r} não existe. As válidas são: {validas}.")
+        return [e.upper() for e in valor]
 
     @field_validator("modalidades")
     @classmethod

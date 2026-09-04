@@ -159,7 +159,16 @@ class PNCPClient:
         data_final: date,
         uf: str | None = None,
     ) -> AsyncIterator[Contratacao]:
-        """Contratações cujo prazo de proposta ainda não encerrou."""
+        """Contratações cujo prazo de proposta ainda não encerrou.
+
+        Atenção ao `data_final`: ele é o **fim do período de recebimento**,
+        não "até quando eu quero olhar". Passar a data de hoje devolve o que
+        encerra hoje — quase tudo já fechado. Para ver o que ainda dá tempo
+        de disputar, `data_final` precisa estar no futuro.
+
+        Descoberto na prática: com dataFinal = hoje, 31 de 37 contratações de
+        Goiás voltaram com o prazo vencido.
+        """
         params: dict[str, Any] = {
             "dataFinal": _aaaammdd(data_final),
             "codigoModalidadeContratacao": modalidade,
