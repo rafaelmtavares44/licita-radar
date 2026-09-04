@@ -8,13 +8,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 import pytest
+import respx
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from licita_radar.config.perfil import Perfil
 from licita_radar.graph import Dependencias, compilar, configuracao, estado_inicial
-from licita_radar.llm import LLMDesligado, Resposta, extrair_frase
+from licita_radar.llm import LLMDesligado, Resposta, extrair_frase, listar_modelos
 from licita_radar.matching.semantico import MotorSemantico
 from tests.dubles import EncoderFalso
 
@@ -217,3 +219,33 @@ class TestEstadoPreveAnaliseDeEdital:
         assert estado["documentos"] == []
         assert estado["texto_edital"] is None
         assert estado["analise"] is None
+
+
+class TestListarModelos:
+    """Provedor aposenta modelo direto — o llama-3.3-70b durou menos de um ano."""
+
+    @respx.mock
+    async def test_devolve_os_ids_ordenados(self) -> None:
+        respx.get("https://api.exemplo.test/v1/models").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {"id": "openai/gpt-oss-120b"},
+                        {"id": "llama-3.1-8b-instant"},
+                        {"id": "whisper-large-v3"},
+                    ]
+                },
+            )
+        )
+
+        modelos = await listar_modelos(base_url="https://api.exemplo.test/v1", api_key="x")
+
+        assert modelos == ["llama-3.1-8b-instant", "openai/gpt-oss-120b", "whisper-large-v3"]
+
+    @respx.mock
+    async def test_provedor_fora_do_ar_devolve_lista_vazia(self) -> None:
+        """Falhar aqui não pode derrubar o diagnóstico: isto é informação extra."""
+        respx.get("https://api.exemplo.test/v1/models").mock(return_value=httpx.Response(500))
+
+        assert await listar_modelos(base_url="https://api.exemplo.test/v1", api_key="x") == []

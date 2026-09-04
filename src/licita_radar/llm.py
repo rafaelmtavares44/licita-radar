@@ -139,6 +139,29 @@ def construir_llm(
     )
 
 
+async def listar_modelos(
+    *, base_url: str, api_key: str | None, timeout_s: float = 15.0
+) -> list[str]:
+    """Pergunta ao provedor quais modelos ele tem.
+
+    Serve para transformar um 404 opaco em algo acionável: provedores
+    aposentam modelo com frequência — o `llama-3.3-70b-versatile` durou
+    menos de um ano — e "esse modelo não existe" sem a lista do que existe
+    deixa a pessoa procurando na documentação.
+    """
+    cabecalhos = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as cliente:
+            resposta = await cliente.get(f"{base_url.rstrip('/')}/models", headers=cabecalhos)
+            resposta.raise_for_status()
+            dados = resposta.json()
+    except (httpx.HTTPError, ValueError, KeyError):
+        return []
+
+    modelos = [str(item.get("id")) for item in dados.get("data", []) if item.get("id")]
+    return sorted(modelos)
+
+
 # ---------------------------------------------------------------------------
 
 SISTEMA_JUSTIFICATIVA = """Você avalia licitações públicas brasileiras para uma empresa.

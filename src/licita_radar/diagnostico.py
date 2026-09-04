@@ -283,7 +283,20 @@ async def checar_llm(settings: Settings) -> Checagem:
         elif "429" in detalhe:
             dica = "cota diária esgotada; tente amanhã ou troque de modelo"
         elif "404" in detalhe:
-            dica = f"o modelo '{settings.llm_modelo}' não existe nesse provedor"
+            # provedor aposenta modelo com frequência: em vez de mandar a
+            # pessoa procurar na documentação, pergunta a ele o que existe
+            from licita_radar.llm import listar_modelos
+
+            disponiveis = await listar_modelos(
+                base_url=settings.llm_base_url or "", api_key=settings.llm_api_key
+            )
+            if disponiveis:
+                amostra = ", ".join(disponiveis[:6])
+                dica = f"'{settings.llm_modelo}' não existe mais. Disponíveis agora: {amostra}" + (
+                    f" (+{len(disponiveis) - 6})" if len(disponiveis) > 6 else ""
+                )
+            else:
+                dica = f"o modelo '{settings.llm_modelo}' não existe nesse provedor"
         return Checagem("LLM", settings.llm_modelo or "?", Estado.FALHA, detalhe[:80], dica)
 
     ms = (time.monotonic() - inicio) * 1000
