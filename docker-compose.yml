@@ -1,0 +1,38 @@
+name: licita-radar
+
+services:
+  db:
+    # A imagem já traz pgvector, que o M2 vai precisar. Até lá, um
+    # Postgres 14+ qualquer serve: a migração 001 não usa extensão.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: licita
+      POSTGRES_PASSWORD: licita
+      POSTGRES_DB: licita_radar
+    ports:
+      - "5432:5432"
+    volumes:
+      - dados_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U licita -d licita_radar"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Roda a ingestão dentro do compose. Para o uso diário na sua máquina,
+  # o normal é rodar a CLI direto no venv — este serviço existe para
+  # quem quer testar o caminho containerizado.
+  radar:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      LR_DATABASE_URL: postgresql://licita:licita@db:5432/licita_radar
+    volumes:
+      - ./perfil.yaml:/app/perfil.yaml:ro
+    profiles: ["cli"]
+    command: ["--help"]
+
+volumes:
+  dados_pg:

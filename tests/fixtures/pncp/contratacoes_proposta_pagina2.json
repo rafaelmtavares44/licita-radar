@@ -1,0 +1,27 @@
+{
+  "_nota": "FIXTURE SINTÉTICA — segunda e última página, para exercitar o fim da paginação (paginasRestantes = 0).",
+  "data": [
+    {
+      "numeroControlePNCP": "02318901000177-1-000013/2026",
+      "modalidadeId": 8,
+      "modalidadeNome": "Dispensa de Licitação",
+      "objetoCompra": "Serviço de instalação de cabeamento estruturado e pontos de rede no prédio anexo.",
+      "valorTotalEstimado": 47000.0,
+      "dataPublicacaoPncp": "2026-09-02T11:20:00",
+      "dataEncerramentoProposta": "2026-09-12T17:00:00",
+      "orgaoEntidade": {
+        "cnpj": "02318901000177",
+        "razaoSocial": "PREFEITURA MUNICIPAL DE APARECIDA DE GOIANIA"
+      },
+      "unidadeOrgao": {
+        "ufSigla": "GO",
+        "municipioNome": "Aparecida de Goiânia"
+      }
+    }
+  ],
+  "totalRegistros": 5,
+  "totalPaginas": 2,
+  "numeroPagina": 2,
+  "paginasRestantes": 0,
+  "empty": false
+}

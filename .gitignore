@@ -1,0 +1,28 @@
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# testes e ferramentas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# segredos e configuração local
+.env
+perfil.yaml
+!perfil.exemplo.yaml
+
+# cache de desenvolvimento das respostas do PNCP
+.cache_pncp/
+
+# editores
+.vscode/
+.idea/
+.DS_Store

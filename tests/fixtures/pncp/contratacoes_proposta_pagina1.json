@@ -1,0 +1,73 @@
+{
+  "_nota": "FIXTURE SINTÉTICA. A estrutura segue o Manual das APIs de Consultas do PNCP, mas os registros foram escritos à mão — nenhum dado real foi capturado. Substitua por uma resposta real assim que rodar o primeiro curl: `licita-radar ingest --seco` com LR_PNCP_CACHE_LOCAL=true grava as respostas em .cache_pncp/.",
+  "data": [
+    {
+      "numeroControlePNCP": "01612092000123-1-000045/2026",
+      "modalidadeId": 6,
+      "modalidadeNome": "Pregão - Eletrônico",
+      "objetoCompra": "Contratação de empresa especializada na prestação de serviços de desenvolvimento e sustentação de sistemas web, incluindo manutenção evolutiva e corretiva, sob demanda, mediante alocação de equipe técnica.",
+      "valorTotalEstimado": 1250000.0,
+      "dataPublicacaoPncp": "2026-09-01T14:32:00",
+      "dataAberturaProposta": "2026-09-02T08:00:00",
+      "dataEncerramentoProposta": "2026-09-18T17:00:00",
+      "orgaoEntidade": {
+        "cnpj": "01612092000123",
+        "razaoSocial": "SECRETARIA DE ESTADO DA ADMINISTRACAO",
+        "poderId": "E",
+        "esferaId": "E"
+      },
+      "unidadeOrgao": {
+        "ufSigla": "GO",
+        "ufNome": "Goiás",
+        "municipioNome": "Goiânia",
+        "codigoUnidade": "925001",
+        "nomeUnidade": "Superintendência de Tecnologia da Informação"
+      }
+    },
+    {
+      "numeroControlePNCP": "01612092000123-1-000046/2026",
+      "modalidadeId": 6,
+      "modalidadeNome": "Pregão - Eletrônico",
+      "objetoCompra": "Aquisição de cartuchos de toner e suprimentos de impressão   \n para as unidades administrativas.",
+      "valorTotalEstimado": 84000.0,
+      "dataPublicacaoPncp": "2026-09-01T15:10:00",
+      "dataAberturaProposta": "2026-09-03T08:00:00",
+      "dataEncerramentoProposta": "2026-09-15T17:00:00",
+      "orgaoEntidade": {
+        "cnpj": "01612092000123",
+        "razaoSocial": "SECRETARIA DE ESTADO DA ADMINISTRACAO"
+      },
+      "unidadeOrgao": {
+        "ufSigla": "GO",
+        "municipioNome": "Goiânia"
+      }
+    },
+    {
+      "numeroControlePNCP": "02318901000177-1-000012/2026",
+      "modalidadeId": 8,
+      "modalidadeNome": "Dispensa de Licitação",
+      "objetoCompra": "Contratação de licença de uso de software de gestão documental com suporte técnico por 12 meses.",
+      "valorTotalEstimado": null,
+      "dataPublicacaoPncp": "2026-09-02T09:45:00",
+      "dataAberturaProposta": "2026-09-03T10:00:00",
+      "orgaoEntidade": {
+        "cnpj": "02318901000177",
+        "razaoSocial": "PREFEITURA MUNICIPAL DE APARECIDA DE GOIANIA"
+      },
+      "unidadeOrgao": {
+        "ufSigla": "GO",
+        "municipioNome": "Aparecida de Goiânia"
+      }
+    },
+    {
+      "numeroControlePNCP": null,
+      "objetoCompra": "Registro sem chave, para o teste de descarte na normalização.",
+      "modalidadeId": 6
+    }
+  ],
+  "totalRegistros": 4,
+  "totalPaginas": 2,
+  "numeroPagina": 1,
+  "paginasRestantes": 1,
+  "empty": false
+}

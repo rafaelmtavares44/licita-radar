@@ -1,0 +1,66 @@
+# Perfil da empresa — a interface do licita-radar na v0.1.
+#
+# Copie para perfil.yaml e ajuste. O perfil.yaml está no .gitignore:
+# o que a sua empresa vende não precisa ir para o repositório público.
+#
+#   cp perfil.exemplo.yaml perfil.yaml
+#   licita-radar perfil        # valida e mostra como foi interpretado
+
+id: acme-software
+nome: Acme Software
+
+# Esta descrição vira o embedding que representa a empresa no matching
+# semântico, e entra no prompt da camada de LLM. Escreva os serviços
+# concretos que vocês prestam — "empresa de tecnologia e inovação" casa
+# com qualquer coisa e com nada.
+descricao: |
+  Fábrica de software sob demanda. Desenvolvimento de sistemas web,
+  APIs de integração, sustentação evolutiva de sistemas legados e
+  alocação de squad de desenvolvimento para órgãos públicos.
+
+# Informativo por enquanto; o casamento por CNAE entra no M2.
+cnaes:
+  - "6201-5/01"   # desenvolvimento de programas de computador sob encomenda
+  - "6202-3/00"   # desenvolvimento e licenciamento de programas customizáveis
+  - "6209-1/00"   # suporte técnico e manutenção em TI
+  - "6311-9/00"   # tratamento de dados e hospedagem
+
+palavras_chave:
+  positivas:
+    - desenvolvimento de software
+    - fábrica de software
+    - sustentação de sistemas
+    - manutenção evolutiva
+    - sistema web
+    - api de integração
+    - alocação de mão de obra em ti
+    - licenciamento de software
+
+  # A lista que mais aumenta a precisão do alerta.
+  # Buscar "TI" no PNCP devolve muito toner e cabo de rede.
+  negativas:
+    - toner
+    - cartucho
+    - impressora
+    - cabeamento estruturado
+    - link de internet
+    - nobreak
+    - vigilância
+    - obra civil
+    - locação de veículo
+
+restricoes:
+  ufs: ["GO", "DF"]
+  modalidades: [6, 8, 4]          # pregão eletrônico, dispensa, concorrência eletrônica
+  valor_minimo: 50000
+  dias_minimos_ate_encerramento: 3   # não avise do que já não dá tempo de montar proposta
+
+pontuacao:
+  peso_lexical: 0.35
+  peso_semantico: 0.65
+  limiar_alerta: 0.72
+  top_n_para_llm: 15              # teto rígido de gasto por execução
+
+canais:
+  - tipo: telegram
+    chat_id: ${TELEGRAM_CHAT_ID}  # resolvido a partir do ambiente, nunca escrito aqui

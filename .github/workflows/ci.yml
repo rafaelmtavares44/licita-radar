@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Instalar
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Formatação
+        run: ruff format --check .
+
+      - name: Tipos
+        run: mypy
+
+      # Nenhum teste toca a rede: tudo roda contra fixtures interceptadas
+      # pelo respx. CI que depende do PNCP estar no ar é CI que quebra sozinho.
+      - name: Testes
+        run: pytest --cov=licita_radar --cov-report=term-missing
