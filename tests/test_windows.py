@@ -39,3 +39,39 @@ def test_no_windows_a_politica_ativa_e_a_selector() -> None:
     import asyncio
 
     assert "Selector" in type(asyncio.get_event_loop_policy()).__name__
+
+
+class TestOrigemDaConfiguracao:
+    """A armadilha que custou uma rodada: o ambiente vence o .env em silêncio."""
+
+    def test_avisa_quando_o_ambiente_sobrepoe_o_arquivo(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from licita_radar.config.settings import Settings
+        from licita_radar.diagnostico import Estado, checar_origem_da_config
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".env").write_text(
+            "LR_DATABASE_URL=postgresql://licita:licita@127.0.0.1:5433/licita_radar\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv(
+            "LR_DATABASE_URL", "postgresql://licita:licita@127.0.0.1:5432/licita_radar"
+        )
+
+        checagem = checar_origem_da_config(Settings())
+
+        assert checagem.estado is Estado.AVISO
+        assert "sobrepõe o .env" in checagem.detalhe
+        assert "Remove-Item" in checagem.dica
+
+    def test_sem_variavel_de_ambiente_nao_avisa(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from licita_radar.config.settings import Settings
+        from licita_radar.diagnostico import Estado, checar_origem_da_config
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("LR_DATABASE_URL", raising=False)
+
+        assert checar_origem_da_config(Settings()).estado is Estado.OK

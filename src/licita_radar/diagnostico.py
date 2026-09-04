@@ -102,6 +102,34 @@ def checar_fastembed() -> Checagem:
     return Checagem("Ambiente", "camada semântica", Estado.OK, "fastembed disponível")
 
 
+def checar_origem_da_config(settings: Settings) -> Checagem:
+    """De onde veio a URL do banco: do .env ou do ambiente?
+
+    Variável de ambiente vence o arquivo, e isso é invisível — a pessoa
+    edita o .env, nada muda, e não há nenhuma pista do porquê.
+    """
+    import os
+
+    do_ambiente = os.environ.get("LR_DATABASE_URL")
+    if not do_ambiente:
+        return Checagem("Ambiente", "origem da configuração", Estado.OK, ".env / padrões")
+
+    arquivo = Path(".env")
+    if arquivo.exists():
+        for linha in arquivo.read_text(encoding="utf-8").splitlines():
+            if linha.startswith("LR_DATABASE_URL=") and linha.split("=", 1)[1] != do_ambiente:
+                return Checagem(
+                    "Ambiente",
+                    "origem da configuração",
+                    Estado.AVISO,
+                    "variável de ambiente sobrepõe o .env",
+                    "para voltar ao arquivo: Remove-Item Env:LR_DATABASE_URL (ou "
+                    "unset LR_DATABASE_URL)",
+                )
+
+    return Checagem("Ambiente", "origem da configuração", Estado.OK, "variável de ambiente")
+
+
 # ------------------------------------------------------------------ rede
 
 
@@ -243,13 +271,22 @@ async def checar_pncp(settings: Settings) -> Checagem:
         )
 
     ms = (time.monotonic() - inicio) * 1000
-    if resposta.status_code >= 500:
+    codigo = resposta.status_code
+
+    if codigo >= 500:
         return Checagem(
-            "PNCP", "API de consultas", Estado.AVISO, f"HTTP {resposta.status_code}", "fora do ar"
+            "PNCP", "API de consultas", Estado.AVISO, f"HTTP {codigo}", "o portal está fora do ar"
         )
-    return Checagem(
-        "PNCP", "API de consultas", Estado.OK, f"HTTP {resposta.status_code} · {ms:.0f} ms"
-    )
+    if codigo >= 400:
+        return Checagem(
+            "PNCP",
+            "API de consultas",
+            Estado.AVISO,
+            f"HTTP {codigo} · {ms:.0f} ms",
+            "a API respondeu, mas recusou os parâmetros desta checagem — "
+            "a rede está boa, e o ingest usa outros",
+        )
+    return Checagem("PNCP", "API de consultas", Estado.OK, f"HTTP {codigo} · {ms:.0f} ms")
 
 
 # ------------------------------------------------------------- orquestra
@@ -259,6 +296,7 @@ async def diagnosticar(settings: Settings, *, com_pncp: bool = True) -> list[Che
     checagens = [
         checar_python(),
         checar_event_loop(),
+        checar_origem_da_config(settings),
         checar_perfil(settings),
         checar_fastembed(),
     ]
