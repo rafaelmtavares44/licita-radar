@@ -69,12 +69,20 @@ class TestTraducaoDeFalha:
         assert "O Postgres está rodando?" in recado
         assert "127.0.0.1" in recado  # a dica do Windows
 
-    def test_usuario_recusado_aponta_o_postgres_errado(self) -> None:
+    def test_senha_recusada_aponta_o_postgres_errado(self) -> None:
         erro = OSError('password authentication failed for user "licita"')
         recado = traduzir_falha(erro, "postgresql://x")
 
-        assert "recusou o usuário" in recado
+        assert "recusou a senha" in recado
         assert "OUTRO Postgres" in recado
+
+    def test_role_inexistente_aponta_o_volume_velho(self) -> None:
+        """Causa oposta à da senha recusada: o container é o certo, mas o
+        volume foi inicializado antes e ignorou POSTGRES_USER."""
+        recado = traduzir_falha(OSError('role "licita" does not exist'), "postgresql://x")
+
+        assert "usuário não existe nele" in recado
+        assert "docker compose down -v" in recado
 
     def test_banco_inexistente(self) -> None:
         recado = traduzir_falha(OSError('database "licita_radar" does not exist'), "postgresql://x")

@@ -49,9 +49,23 @@ def traduzir_falha(erro: BaseException, alvo: str) -> str:
     """
     detalhe = str(erro).lower()
 
-    if "authentication" in detalhe or "senha" in detalhe or "role" in detalhe:
+    # "role não existe" e "senha recusada" parecem a mesma coisa e têm causas
+    # opostas: no primeiro caso o container é o certo mas nasceu sem o
+    # usuário; no segundo, quem atende é outro Postgres.
+    if "role" in detalhe and ("does not exist" in detalhe or "não existe" in detalhe):
         return (
-            f"O banco em {alvo} respondeu, mas recusou o usuário.\n\n"
+            f"O banco em {alvo} respondeu, mas o usuário não existe nele.\n\n"
+            "  O Postgres só cria o usuário do compose quando o volume está\n"
+            "  vazio. Se ele foi inicializado antes, ignora POSTGRES_USER.\n\n"
+            "  • Apague o volume e deixe nascer de novo:\n"
+            "        docker compose down -v\n"
+            "        docker compose up -d db\n"
+            "    (só faça isso se não houver dado que você queira manter)"
+        )
+
+    if "authentication" in detalhe or "senha" in detalhe or "password" in detalhe:
+        return (
+            f"O banco em {alvo} respondeu, mas recusou a senha.\n\n"
             "  Isso costuma significar que há OUTRO Postgres nessa porta —\n"
             "  o que você instalou na máquina, e não o do docker compose.\n\n"
             "  • Confira quem atende:       docker compose ps\n"
