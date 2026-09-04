@@ -21,11 +21,21 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+#: Modelos que raciocinam antes de responder. O nome é o único sinal
+#: disponível antes da primeira chamada.
+_MARCAS_DE_RACIOCINIO = ("gpt-oss", "o1", "o3", "o4", "deepseek-r", "qwq", "thinking")
+
+
+def e_de_raciocinio(modelo: str) -> bool:
+    nome = modelo.lower()
+    return any(marca in nome for marca in _MARCAS_DE_RACIOCINIO)
 
 
 @dataclass(frozen=True)
@@ -43,7 +53,7 @@ class LLM(Protocol):
     @property
     def ativo(self) -> bool: ...
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 220) -> Resposta: ...
+    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 600) -> Resposta: ...
 
 
 class LLMDesligado:
@@ -62,7 +72,7 @@ class LLMDesligado:
     def ativo(self) -> bool:
         return False
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 220) -> Resposta:
+    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 600) -> Resposta:
         return Resposta(texto="", modelo=self.modelo, tokens=0)
 
 
@@ -90,12 +100,12 @@ class LLMCompativelOpenAI:
     def ativo(self) -> bool:
         return True
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 220) -> Resposta:
+    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 600) -> Resposta:
         cabecalhos = {"Content-Type": "application/json"}
         if self._api_key:
             cabecalhos["Authorization"] = f"Bearer {self._api_key}"
 
-        corpo = {
+        corpo: dict[str, Any] = {
             "model": self._modelo,
             "messages": [
                 {"role": "system", "content": sistema},
@@ -107,6 +117,14 @@ class LLMCompativelOpenAI:
             "temperature": 0.0,
         }
 
+        # Modelos de raciocínio (gpt-oss, o-series, qwen3 "thinking") gastam
+        # tokens pensando ANTES de escrever, e o pensamento sai do mesmo
+        # orçamento. Com um teto apertado, eles consomem tudo raciocinando e
+        # devolvem `content` vazio — sem erro nenhum, o que é pior. Pedir
+        # esforço baixo evita isso numa justificativa de uma frase.
+        if e_de_raciocinio(self._modelo):
+            corpo["reasoning_effort"] = "low"
+
         async with httpx.AsyncClient(timeout=self._timeout) as cliente:
             resposta = await cliente.post(
                 f"{self._base_url}/chat/completions", headers=cabecalhos, json=corpo
@@ -114,7 +132,17 @@ class LLMCompativelOpenAI:
             resposta.raise_for_status()
             dados = resposta.json()
 
-        texto = (dados["choices"][0]["message"]["content"] or "").strip()
+        mensagem = dados["choices"][0].get("message") or {}
+        texto = (mensagem.get("content") or "").strip()
+
+        # Alguns provedores devolvem o raciocínio num campo separado e deixam
+        # `content` vazio quando o corte de tokens chega no meio. Melhor uma
+        # frase tirada dali do que um alerta em branco.
+        if not texto:
+            texto = str(
+                mensagem.get("reasoning") or mensagem.get("reasoning_content") or ""
+            ).strip()
+
         uso = dados.get("usage") or {}
         return Resposta(
             texto=texto,

@@ -347,8 +347,18 @@ def cmd_revisar(
                     f"[dim]{contratacao.orgao_nome or '—'} · {contratacao.uf or '—'} · "
                     f"{_moeda(contratacao.valor_estimado)}[/dim]"
                 )
-                if estado.get("justificativa"):
-                    console.print(f"[green]{estado['justificativa']}[/green]")
+                justificativa = estado.get("justificativa")
+                if justificativa:
+                    console.print(f"[green]{justificativa}[/green]")
+                else:
+                    console.print(
+                        "[yellow]sem justificativa — o modelo não devolveu texto[/yellow]"
+                    )
+                if estado.get("modelo_usado"):
+                    modelo = estado["modelo_usado"]
+                    gastos = estado.get("tokens_gastos", 0)
+                    nota = estado.get("score_final", 0)
+                    console.print(f"[dim]{modelo} · {gastos} tokens · score {nota:.2f}[/dim]")
                 if contratacao.url_pncp:
                     console.print(f"[dim]{contratacao.url_pncp}[/dim]")
 

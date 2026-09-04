@@ -6,6 +6,7 @@ descartado onde, e se o descarte deixa rastro.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -16,7 +17,14 @@ from langgraph.types import Command
 
 from licita_radar.config.perfil import Perfil
 from licita_radar.graph import Dependencias, compilar, configuracao, estado_inicial
-from licita_radar.llm import LLMDesligado, Resposta, extrair_frase, listar_modelos
+from licita_radar.llm import (
+    LLMCompativelOpenAI,
+    LLMDesligado,
+    Resposta,
+    e_de_raciocinio,
+    extrair_frase,
+    listar_modelos,
+)
 from licita_radar.matching.semantico import MotorSemantico
 from tests.dubles import EncoderFalso
 
@@ -249,3 +257,78 @@ class TestListarModelos:
         respx.get("https://api.exemplo.test/v1/models").mock(return_value=httpx.Response(500))
 
         assert await listar_modelos(base_url="https://api.exemplo.test/v1", api_key="x") == []
+
+
+class TestModeloDeRaciocinio:
+    """O gpt-oss gastou 500 tokens pensando e devolveu texto vazio."""
+
+    def test_reconhece_pelos_nomes_conhecidos(self) -> None:
+        assert e_de_raciocinio("openai/gpt-oss-120b")
+        assert e_de_raciocinio("deepseek-r1")
+        assert e_de_raciocinio("qwen3-32b-thinking")
+        assert not e_de_raciocinio("llama-3.1-8b-instant")
+
+    @respx.mock
+    async def test_pede_esforco_baixo_para_sobrar_orcamento(self) -> None:
+        respx.post("https://api.exemplo.test/v1/chat/completions").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "model": "openai/gpt-oss-120b",
+                    "choices": [{"message": {"content": "Combina com a empresa."}}],
+                    "usage": {"total_tokens": 90},
+                },
+            )
+        )
+        llm = LLMCompativelOpenAI(
+            base_url="https://api.exemplo.test/v1", modelo="openai/gpt-oss-120b", api_key="x"
+        )
+
+        await llm.responder(sistema="s", usuario="u")
+
+        corpo = json.loads(respx.calls.last.request.content)
+        assert corpo["reasoning_effort"] == "low"
+        assert corpo["max_tokens"] >= 500
+
+    @respx.mock
+    async def test_content_vazio_cai_no_campo_de_raciocinio(self) -> None:
+        respx.post("https://api.exemplo.test/v1/chat/completions").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "model": "openai/gpt-oss-120b",
+                    "choices": [
+                        {"message": {"content": "", "reasoning": "A empresa faz software."}}
+                    ],
+                    "usage": {"total_tokens": 500},
+                },
+            )
+        )
+        llm = LLMCompativelOpenAI(
+            base_url="https://api.exemplo.test/v1", modelo="openai/gpt-oss-120b", api_key="x"
+        )
+
+        resposta = await llm.responder(sistema="s", usuario="u")
+
+        assert "software" in resposta.texto
+
+    async def test_resposta_vazia_vira_heuristica_e_nao_silencio(self, perfil: Perfil) -> None:
+        """Alerta sem justificativa parece defeito da licitação, não do modelo."""
+
+        class LLMMudo(LLMFalso):
+            async def responder(self, **_: Any) -> Resposta:
+                self.chamadas += 1
+                return Resposta(texto="", modelo="mudo", tokens=500)
+
+        app = compilar(_deps(perfil, LLMMudo()), checkpointer=InMemorySaver())
+        config = configuracao("X-5-1/2026")
+
+        await app.ainvoke(
+            _entrada("Desenvolvimento de software e sustentação de sistemas", perfil), config=config
+        )
+        estado = (await app.aget_state(config)).values
+
+        assert estado["justificativa"]
+        assert "similaridade" in estado["justificativa"]
+        assert estado["tokens_gastos"] == 500  # o gasto é registrado mesmo assim
+        assert estado["trilha"][-1] == "justificar:vazia"

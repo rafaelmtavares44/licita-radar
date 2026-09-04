@@ -129,8 +129,29 @@ async def justificar(estado: EditalState, deps: Dependencias) -> EditalState:
             trilha=["justificar:erro"],
         )
 
+    frase = extrair_frase(resposta.texto)
+
+    if not frase:
+        # Aconteceu com o gpt-oss-120b: 500 tokens gastos e content vazio,
+        # sem erro. Um alerta sem justificativa é pior que um alerta com a
+        # explicação heurística — o silêncio parece defeito da licitação.
+        logger.warning(
+            "%s: o modelo gastou %d tokens e não devolveu texto",
+            estado.get("numero_controle"),
+            resposta.tokens,
+        )
+        achadas = ", ".join(estado.get("palavras_encontradas", []))
+        base = f"casou com {achadas}" if achadas else "semanticamente próxima do perfil"
+        return EditalState(
+            justificativa=f"{base} · similaridade {estado.get('score_semantico', 0):.2f}",
+            modelo_usado=resposta.modelo,
+            tokens_gastos=resposta.tokens,
+            situacao="aguardando_revisao",
+            trilha=["justificar:vazia"],
+        )
+
     return EditalState(
-        justificativa=extrair_frase(resposta.texto),
+        justificativa=frase,
         modelo_usado=resposta.modelo,
         tokens_gastos=resposta.tokens,
         situacao="aguardando_revisao",
