@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
@@ -15,6 +16,8 @@ from rich.table import Table
 
 from licita_radar.config.perfil import ErroDePerfil, Perfil, carregar_perfil
 from licita_radar.config.settings import get_settings
+from licita_radar.diagnostico import Estado
+from licita_radar.diagnostico import executar as executar_diagnostico
 from licita_radar.ingest.modalidades import rotular
 from licita_radar.ingest.pncp_client import coletar
 from licita_radar.matching.encoder import FastEmbedEncoder, similaridade_cosseno
@@ -24,6 +27,15 @@ from licita_radar.matching.semantico import MotorSemantico
 from licita_radar.storage.db import Banco, ErroDeBanco, migrar
 from licita_radar.storage.matching_repo import AvaliacaoRepo, EmbeddingRepo, MatchingRepo
 from licita_radar.storage.repositories import ContratacaoRepo, ExecucaoRepo
+
+# ---------------------------------------------------------------------------
+# No Windows, o asyncio usa o ProactorEventLoop por padrão, e o psycopg
+# recusa rodar em modo assíncrono nele — a conexão falha com InterfaceError
+# antes mesmo de tocar a rede. Isto precisa acontecer na importação, antes
+# de qualquer asyncio.run(), e não custa nada nos outros sistemas.
+if sys.platform == "win32":  # pragma: no cover — só roda no Windows
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# ---------------------------------------------------------------------------
 
 app = typer.Typer(
     add_completion=False,
@@ -211,6 +223,40 @@ def cmd_listar(
             _moeda(linha["valor_estimado"]),
         )
     console.print(tabela)
+
+
+@app.command("doctor")
+def cmd_doctor(
+    sem_rede: Annotated[
+        bool, typer.Option("--sem-rede", help="Pula a checagem da API do PNCP")
+    ] = False,
+) -> None:
+    """Diz o que está quebrado e o que fazer a respeito."""
+    checagens = executar_diagnostico(get_settings(), com_pncp=not sem_rede)
+
+    simbolo = {
+        Estado.OK: "[green]✓[/green]",
+        Estado.FALHA: "[red]✗[/red]",
+        Estado.AVISO: "[yellow]![/yellow]",
+        Estado.PULADO: "[dim]–[/dim]",
+    }
+
+    grupo_atual = ""
+    for c in checagens:
+        if c.grupo != grupo_atual:
+            grupo_atual = c.grupo
+            console.print(f"\n[bold]{grupo_atual}[/bold]")
+        detalhe = f"  [dim]{c.detalhe}[/dim]" if c.detalhe else ""
+        console.print(f"  {simbolo[c.estado]} {c.titulo}{detalhe}")
+        if c.dica:
+            console.print(f"      [yellow]→ {c.dica}[/yellow]")
+
+    falhas = [c for c in checagens if c.estado is Estado.FALHA]
+    console.print()
+    if falhas:
+        console.print(f"[bold red]{len(falhas)} problema(s).[/bold red] Comece pelo primeiro ✗.")
+        raise typer.Exit(code=1)
+    console.print("[bold green]Tudo pronto.[/bold green]")
 
 
 @app.command("match")

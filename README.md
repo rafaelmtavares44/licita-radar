@@ -56,6 +56,26 @@ licita-radar listar
 > uso*, ponha `LR_DB_PORT=5433` no `.env`, troque a porta também na
 > `LR_DATABASE_URL`, e suba de novo.
 
+### Travou? `licita-radar doctor`
+
+```
+Ambiente
+  ✓ Python 3.12.3  win32
+  ✓ event loop  WindowsSelectorEventLoopPolicy
+  ✓ perfil (perfil.yaml)  Acme Software
+  ! camada semântica  fastembed não instalado
+      → opcional: pip install -e ".[semantico]"
+
+Banco
+  ✓ resolver 127.0.0.1  127.0.0.1
+  ✗ porta 5432 aberta  Connection refused
+      → suba o banco: docker compose up -d db
+```
+
+Ele testa cada camada separadamente — Python, event loop, perfil, DNS, porta
+TCP, autenticação, extensão, migrações e a API do PNCP — e para no primeiro
+problema com a instrução do conserto.
+
 ### Os comandos
 
 | Comando | O que faz |
@@ -65,6 +85,7 @@ licita-radar listar
 | `licita-radar ingest` | Busca contratações no PNCP e grava. `--seco` mostra sem gravar |
 | `licita-radar listar` | Mostra o que está guardado, com proposta ainda aberta |
 | `licita-radar match` | Pontua tudo contra o seu perfil e mostra o funil |
+| `licita-radar doctor` | Diagnostica o ambiente quando algo não funciona |
 
 `licita-radar ingest --historico --dias 30` faz backfill por data de publicação, em vez de buscar só o que está com proposta aberta.
 
@@ -134,6 +155,8 @@ A [API de consultas](https://pncp.gov.br/api/consulta/swagger-ui/index.html) é 
 **A dispensa domina o volume, e ela é barata.** Numa amostra real de Goiás, 36 das 37 contratações abertas eram dispensa (modalidade 8), com valores entre R$ 900 e R$ 13 mil. Um `valor_minimo` de 50 mil no perfil elimina praticamente toda a modalidade — justamente aquela em que a empresa pequena tem chance.
 
 **O objeto vem coberto de casca burocrática.** `DESPESA REFERENTE A`, `SOLICITAÇÃO DE`, `1 -TERMO DE SOLICITAÇÃO`, `[Portal de Compras Públicas] - DISPENSA -`. Esse prefixo é idêntico em licitação de software e de picolé; o projeto remove antes de comparar, senão a busca semântica aproxima coisas que não têm nada a ver.
+
+**No Windows, o psycopg exige trocar o event loop.** O `asyncio.run()` de lá usa o `ProactorEventLoop`, incompatível com o psycopg assíncrono: a conexão falha com `InterfaceError` antes de tocar a rede, e o sintoma parece problema de rede. A CLI troca a política na importação; se você usar o pacote como biblioteca, faça o mesmo.
 
 **Não há limite de requisições documentado.** O cliente trata como se houvesse: concorrência baixa, backoff exponencial e cache local opcional durante o desenvolvimento (`LR_PNCP_CACHE_LOCAL=true`).
 

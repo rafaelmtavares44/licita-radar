@@ -1,0 +1,286 @@
+"""O `licita-radar doctor`: descobre por que nada funciona.
+
+Existe porque "não consegui conectar no banco" pode significar cinco
+coisas diferentes, e adivinhar qual delas é um jeito ruim de passar a
+tarde. Aqui cada camada é testada separadamente, na ordem em que uma
+depende da outra, e a primeira que falhar já diz o que fazer.
+
+Nenhuma verificação levanta exceção: falhar é o resultado esperado de
+metade delas.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import socket
+import sys
+import time
+from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
+from urllib.parse import urlparse
+
+from licita_radar.config.perfil import ErroDePerfil, carregar_perfil
+from licita_radar.config.settings import Settings
+
+
+class Estado(StrEnum):
+    OK = "ok"
+    FALHA = "falha"
+    AVISO = "aviso"
+    PULADO = "pulado"
+
+
+@dataclass(frozen=True)
+class Checagem:
+    grupo: str
+    titulo: str
+    estado: Estado
+    detalhe: str = ""
+    dica: str = ""
+
+
+def _endereco(url: str) -> tuple[str, int]:
+    partes = urlparse(url)
+    return partes.hostname or "127.0.0.1", partes.port or 5432
+
+
+# --------------------------------------------------------------- ambiente
+
+
+def checar_python() -> Checagem:
+    versao = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    return Checagem("Ambiente", f"Python {versao}", Estado.OK, sys.platform)
+
+
+def checar_event_loop() -> Checagem:
+    """No Windows, o psycopg recusa o ProactorEventLoop — o padrão de lá."""
+    # O mypy resolve sys.platform estaticamente pela plataforma da checagem
+    # e declara o resto inalcançável — mas em Windows ele é o caminho normal.
+    if sys.platform != "win32":
+        return Checagem("Ambiente", "event loop", Estado.OK, "compatível")
+
+    politica = type(asyncio.get_event_loop_policy()).__name__  # type: ignore[unreachable]
+    if "Selector" in politica:
+        return Checagem("Ambiente", "event loop", Estado.OK, politica)
+    return Checagem(
+        "Ambiente",
+        "event loop",
+        Estado.FALHA,
+        politica,
+        "o psycopg não roda no ProactorEventLoop; a CLI deveria trocar a política",
+    )
+
+
+def checar_perfil(settings: Settings) -> Checagem:
+    caminho = Path(settings.perfil_path)
+    try:
+        perfil = carregar_perfil(caminho)
+    except ErroDePerfil as erro:
+        primeira_linha = str(erro).splitlines()[0]
+        return Checagem(
+            "Ambiente",
+            f"perfil ({caminho})",
+            Estado.FALHA,
+            primeira_linha,
+            "copie o perfil.exemplo.yaml e ajuste",
+        )
+    return Checagem("Ambiente", f"perfil ({caminho})", Estado.OK, perfil.nome)
+
+
+def checar_fastembed() -> Checagem:
+    try:
+        import fastembed  # noqa: F401
+    except ImportError:
+        return Checagem(
+            "Ambiente",
+            "camada semântica",
+            Estado.AVISO,
+            "fastembed não instalado",
+            'opcional: pip install -e ".[semantico]" — sem ele use match --sem-semantica',
+        )
+    return Checagem("Ambiente", "camada semântica", Estado.OK, "fastembed disponível")
+
+
+# ------------------------------------------------------------------ rede
+
+
+def checar_dns(settings: Settings) -> Checagem:
+    host, _ = _endereco(settings.database_url)
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as erro:
+        return Checagem("Banco", f"resolver {host}", Estado.FALHA, str(erro))
+
+    familias = {"IPv6" if info[0] == socket.AF_INET6 else "IPv4" for info in infos}
+    enderecos = sorted({str(info[4][0]) for info in infos})
+
+    # A armadilha clássica no Windows: 'localhost' resolve para ::1 primeiro
+    # e o Docker Desktop publica a porta só em IPv4.
+    if "IPv6" in familias and host.lower() == "localhost":
+        return Checagem(
+            "Banco",
+            f"resolver {host}",
+            Estado.AVISO,
+            ", ".join(enderecos),
+            "no Windows, troque 'localhost' por '127.0.0.1' na LR_DATABASE_URL",
+        )
+    return Checagem("Banco", f"resolver {host}", Estado.OK, ", ".join(enderecos))
+
+
+def checar_porta(settings: Settings) -> Checagem:
+    host, porta = _endereco(settings.database_url)
+    inicio = time.monotonic()
+    try:
+        with socket.create_connection((host, porta), timeout=settings.database_timeout_s):
+            ms = (time.monotonic() - inicio) * 1000
+            return Checagem("Banco", f"porta {porta} aberta", Estado.OK, f"{ms:.0f} ms")
+    except TimeoutError:
+        return Checagem(
+            "Banco",
+            f"porta {porta} aberta",
+            Estado.FALHA,
+            "tempo esgotado",
+            "firewall bloqueando, ou o Docker não publicou a porta",
+        )
+    except OSError as erro:
+        return Checagem(
+            "Banco",
+            f"porta {porta} aberta",
+            Estado.FALHA,
+            str(erro),
+            "suba o banco: docker compose up -d db",
+        )
+
+
+# ----------------------------------------------------------------- banco
+
+
+async def checar_postgres(settings: Settings) -> list[Checagem]:
+    from psycopg import AsyncConnection, OperationalError
+
+    from licita_radar.storage.db import traduzir_falha
+
+    try:
+        conexao = await AsyncConnection.connect(
+            settings.database_url, connect_timeout=int(settings.database_timeout_s)
+        )
+    except OperationalError as erro:
+        dica = traduzir_falha(erro, settings.database_url_segura).splitlines()[0]
+        return [
+            Checagem("Banco", "autenticar", Estado.FALHA, str(erro).strip()[:90], dica),
+            Checagem("Banco", "extensão vector", Estado.PULADO),
+            Checagem("Banco", "migrações aplicadas", Estado.PULADO),
+        ]
+
+    resultado: list[Checagem] = []
+    async with conexao, conexao.cursor() as cur:
+        if True:
+            await cur.execute("SELECT version()")
+            linha = await cur.fetchone()
+            versao = str(linha[0]).split(" on ")[0] if linha else "?"
+            resultado.append(Checagem("Banco", "autenticar", Estado.OK, versao))
+
+            await cur.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+            tem_vector = await cur.fetchone() is not None
+            resultado.append(
+                Checagem("Banco", "extensão vector", Estado.OK, "instalada")
+                if tem_vector
+                else Checagem(
+                    "Banco",
+                    "extensão vector",
+                    Estado.AVISO,
+                    "ausente",
+                    "o M2 precisa dela: rode licita-radar migrar",
+                )
+            )
+
+            try:
+                await cur.execute("SELECT count(*) FROM schema_migracao")
+                total = await cur.fetchone()
+                quantas = int(total[0]) if total else 0
+            except Exception:  # tabela de controle ainda não existe
+                quantas = 0
+
+            resultado.append(
+                Checagem("Banco", "migrações aplicadas", Estado.OK, f"{quantas}")
+                if quantas
+                else Checagem(
+                    "Banco",
+                    "migrações aplicadas",
+                    Estado.AVISO,
+                    "nenhuma",
+                    "rode: licita-radar migrar",
+                )
+            )
+    return resultado
+
+
+# ------------------------------------------------------------------ PNCP
+
+
+async def checar_pncp(settings: Settings) -> Checagem:
+    import httpx
+
+    url = f"{settings.pncp_base_url}/v1/contratacoes/proposta"
+    params: dict[str, str | int] = {
+        "dataFinal": time.strftime("%Y%m%d"),
+        "codigoModalidadeContratacao": 6,
+        "pagina": 1,
+        "tamanhoPagina": 1,
+    }
+    inicio = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as cliente:
+            resposta = await cliente.get(url, params=params)
+    except httpx.HTTPError as erro:
+        return Checagem(
+            "PNCP",
+            "API de consultas",
+            Estado.FALHA,
+            str(erro)[:80],
+            "sem internet, ou a rede bloqueia o pncp.gov.br",
+        )
+
+    ms = (time.monotonic() - inicio) * 1000
+    if resposta.status_code >= 500:
+        return Checagem(
+            "PNCP", "API de consultas", Estado.AVISO, f"HTTP {resposta.status_code}", "fora do ar"
+        )
+    return Checagem(
+        "PNCP", "API de consultas", Estado.OK, f"HTTP {resposta.status_code} · {ms:.0f} ms"
+    )
+
+
+# ------------------------------------------------------------- orquestra
+
+
+async def diagnosticar(settings: Settings, *, com_pncp: bool = True) -> list[Checagem]:
+    checagens = [
+        checar_python(),
+        checar_event_loop(),
+        checar_perfil(settings),
+        checar_fastembed(),
+    ]
+
+    dns = checar_dns(settings)
+    porta = checar_porta(settings)
+    checagens += [dns, porta]
+
+    if porta.estado is Estado.OK:
+        checagens += await checar_postgres(settings)
+    else:
+        checagens += [
+            Checagem("Banco", "autenticar", Estado.PULADO),
+            Checagem("Banco", "extensão vector", Estado.PULADO),
+            Checagem("Banco", "migrações aplicadas", Estado.PULADO),
+        ]
+
+    if com_pncp:
+        checagens.append(await checar_pncp(settings))
+
+    return checagens
+
+
+def executar(settings: Settings, *, com_pncp: bool = True) -> list[Checagem]:
+    return asyncio.run(diagnosticar(settings, com_pncp=com_pncp))
