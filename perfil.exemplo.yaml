@@ -58,6 +58,13 @@ palavras_chave:
     - vigilância
     - obra civil
     - locação de veículo
+    # falsos positivos vistos no federal: "serviços especializados sob
+    # demanda" de engenharia se parece com o de software para o modelo
+    - construção civil
+    - engenharia e arquitetura
+    - manutenção predial
+    - brigada de incêndio
+    - seguro patrimonial
 
 restricoes:
   # Vazio = o Brasil inteiro. Liste siglas para restringir.
@@ -80,9 +87,20 @@ restricoes:
   dias_minimos_ate_encerramento: 2   # não avise do que já não dá tempo de montar proposta
 
 pontuacao:
-  peso_lexical: 0.35
-  peso_semantico: 0.65
-  limiar_alerta: 0.72
+  peso_lexical: 0.30
+  peso_semantico: 0.70
+
+  # Calibrado com dados federais reais, não com intuição. A similaridade de
+  # cosseno entre dois textos diferentes raramente passa de 0,6 — mesmo
+  # quando falam da mesma coisa. Somada a um score léxico quase sempre zero,
+  # ela põe o teto prático do score final por volta de 0,5.
+  #
+  # O valor anterior aqui era 0,72: alto demais para ser atingido, o que
+  # tornava o alerta impossível em vez de seletivo. Se nada aparecer,
+  # `licita-radar match` sugere um corte a partir da sua própria
+  # distribuição de scores.
+  limiar_alerta: 0.35
+
   top_n_para_llm: 15              # teto rígido de gasto por execução
 
 canais:

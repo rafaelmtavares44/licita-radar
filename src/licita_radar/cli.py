@@ -20,6 +20,7 @@ from licita_radar.diagnostico import Estado
 from licita_radar.diagnostico import executar as executar_diagnostico
 from licita_radar.ingest.modalidades import rotular
 from licita_radar.ingest.pncp_client import coletar
+from licita_radar.matching.calibragem import sugerir_limiar
 from licita_radar.matching.encoder import FastEmbedEncoder, similaridade_cosseno
 from licita_radar.matching.limpeza import limpar_objeto
 from licita_radar.matching.pontuacao import Avaliacao, Veredito, avaliar, explicar
@@ -368,6 +369,7 @@ def cmd_match(
             _mostrar_funil(avaliacoes)
             _mostrar_motivos(avaliacoes)
             _mostrar_ranking(avaliacoes, limite=limite)
+            _sugerir_limiar(avaliacoes, perfil)
 
     _rodar(_executar())
 
@@ -433,6 +435,27 @@ def _mostrar_motivos(avaliacoes: list[Avaliacao]) -> None:
         tabela.add_row(motivo, str(qtd), f"[dim]{ajuste}[/dim]")
 
     console.print(tabela)
+
+
+def _sugerir_limiar(avaliacoes: list[Avaliacao], perfil: Perfil) -> None:
+    """Se ninguém passou, o limiar provavelmente está fora da escala real."""
+    vivas = [a for a in avaliacoes if a.veredito is not Veredito.INELEGIVEL]
+    if not vivas or any(a.alerta for a in vivas):
+        return
+
+    sugestao = sugerir_limiar([a.score_final for a in vivas])
+    atual = perfil.pontuacao.limiar_alerta
+    if sugestao.limiar >= atual:
+        return
+
+    console.print(
+        f"\n[yellow]Nenhuma candidata, e o limiar pode ser a causa.[/yellow]\n"
+        f"  O melhor score de hoje foi [bold]{sugestao.maximo:.2f}[/bold]; "
+        f"o limiar do perfil é [bold]{atual:.2f}[/bold].\n"
+        f"  Com [bold]limiar_alerta: {sugestao.limiar}[/bold] passariam "
+        f"{sugestao.quantos_alertariam} de {sugestao.total} — "
+        f"[dim]mediana {sugestao.mediana:.2f} · p90 {sugestao.percentil_90:.2f}[/dim]"
+    )
 
 
 def _mostrar_ranking(avaliacoes: list[Avaliacao], *, limite: int) -> None:
