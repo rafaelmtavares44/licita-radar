@@ -149,6 +149,31 @@ async def test_pendentes_de_embedding_encolhe_conforme_se_codifica(banco: Banco)
 
 
 @sem_banco
+async def test_pendentes_pode_ser_restrito_a_um_conjunto(banco: Banco) -> None:
+    """O bug que fez licitação de software pontuar 0,00 na semântica.
+
+    A consulta de pendentes e a que carrega as contratações usavam ordens e
+    limites diferentes. Parte do que era avaliado nunca era codificada, e
+    ficava com vetor ausente — indistinguível de "nada a ver com o perfil".
+    """
+    contratacoes = [
+        _contratacao("F-1-1/2026", "Licença de software de design gráfico"),
+        _contratacao("F-1-2/2026", "Aquisição de gás de cozinha"),
+        _contratacao("F-1-3/2026", "Serviço de jardinagem"),
+    ]
+    await ContratacaoRepo(banco).salvar_muitas(contratacoes)
+    embeddings = EmbeddingRepo(banco)
+
+    todas = await embeddings.numeros_sem_embedding(modelo="m1")
+    assert len(todas) == 3
+
+    recorte = await embeddings.numeros_sem_embedding(
+        modelo="m1", entre=["F-1-1/2026", "F-1-3/2026"]
+    )
+    assert sorted(recorte) == ["F-1-1/2026", "F-1-3/2026"]
+
+
+@sem_banco
 async def test_avaliacao_faz_upsert_e_ranking_ordena(banco: Banco, perfil: Perfil) -> None:
     contratacoes = [
         _contratacao("C-1-1/2026", "Desenvolvimento de software e sustentação de sistemas"),

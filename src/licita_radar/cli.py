@@ -296,6 +296,10 @@ def cmd_match(
             help="Só a camada léxica. Não baixa modelo — bom para calibrar as palavras-chave",
         ),
     ] = False,
+    limite_avaliacao: Annotated[
+        int,
+        typer.Option("--avaliar", help="Quantas contratações avaliar de uma vez"),
+    ] = 5000,
 ) -> None:
     """Pontua o que está no banco contra o seu perfil."""
     _configurar_log()
@@ -304,20 +308,31 @@ def cmd_match(
     async def _executar() -> None:
         async with Banco() as banco:
             matching = MatchingRepo(banco)
-            contratacoes = await matching.carregar_contratacoes(uf=uf, limite=500)
+            contratacoes = await matching.carregar_contratacoes(uf=uf, limite=limite_avaliacao)
 
             if not contratacoes:
                 console.print("[dim]nada no banco — rode `licita-radar ingest` antes[/dim]")
                 return
 
             console.print(f"[dim]avaliando {len(contratacoes)} contratações[/dim]")
+            if len(contratacoes) == limite_avaliacao:
+                console.print(
+                    f"[yellow]o limite de {limite_avaliacao} foi atingido — "
+                    f"use --avaliar para aumentar[/yellow]"
+                )
             scores: dict[str, float] = {}
 
             if not sem_semantica:
                 motor = MotorSemantico(FastEmbedEncoder())
                 embeddings = EmbeddingRepo(banco)
+                # a pergunta é feita sobre exatamente as contratações que serão
+                # avaliadas: perguntar "quais faltam?" sem esse recorte devolvia
+                # outro conjunto, e parte do que era avaliado ficava sem vetor
                 pendentes = set(
-                    await embeddings.numeros_sem_embedding(modelo=motor.encoder.nome, limite=500)
+                    await embeddings.numeros_sem_embedding(
+                        modelo=motor.encoder.nome,
+                        entre=[c.numero_controle_pncp for c in contratacoes],
+                    )
                 )
                 a_codificar = [c for c in contratacoes if c.numero_controle_pncp in pendentes]
 

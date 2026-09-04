@@ -64,18 +64,35 @@ class EmbeddingRepo:
             await conn.commit()
         return len(codificados)
 
-    async def numeros_sem_embedding(self, *, modelo: str, limite: int = 500) -> list[str]:
-        """Quem ainda não foi codificado — ou foi por outro modelo."""
+    async def numeros_sem_embedding(
+        self, *, modelo: str, entre: Sequence[str] | None = None, limite: int = 5000
+    ) -> list[str]:
+        """Quem ainda não foi codificado — ou foi por outro modelo.
+
+        `entre` restringe a pergunta a um conjunto conhecido. Sem ele, esta
+        consulta e a que carrega as contratações usavam ordens e limites
+        diferentes, e sobravam contratações avaliadas sem embedding nenhum —
+        pontuando 0,00 na semântica por não terem sido codificadas.
+        """
         sql = """
             SELECT c.numero_controle_pncp
               FROM contratacao c
               LEFT JOIN contratacao_embedding e USING (numero_controle_pncp)
-             WHERE e.numero_controle_pncp IS NULL OR e.modelo <> %(modelo)s
+             WHERE (e.numero_controle_pncp IS NULL OR e.modelo <> %(modelo)s)
+               AND (%(entre)s::text[] IS NULL
+                    OR c.numero_controle_pncp = ANY(%(entre)s::text[]))
              ORDER BY c.ingerido_em DESC
              LIMIT %(limite)s
         """
         async with self._banco.conexao() as conn, conn.cursor() as cur:
-            await cur.execute(sql, {"modelo": modelo, "limite": limite})
+            await cur.execute(
+                sql,
+                {
+                    "modelo": modelo,
+                    "entre": list(entre) if entre is not None else None,
+                    "limite": limite,
+                },
+            )
             return [linha[0] for linha in await cur.fetchall()]
 
 
