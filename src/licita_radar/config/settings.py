@@ -7,6 +7,7 @@ empresa vende, o que ela quer receber — mora no perfil YAML, nunca aqui.
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
     # --- banco ---
     database_url: str = "postgresql://licita:licita@localhost:5432/licita_radar"
 
+    #: Curto de propósito. Banco fora do ar é a falha mais comum de quem
+    #: está começando, e ela deve aparecer em segundos, não em meio minuto.
+    database_timeout_s: float = Field(default=5.0, ge=1.0, le=120.0)
+
     # --- PNCP ---
     pncp_base_url: str = "https://pncp.gov.br/api/consulta"
     pncp_timeout_s: float = 30.0
@@ -39,6 +44,11 @@ class Settings(BaseSettings):
 
     # --- observabilidade ---
     log_level: str = "INFO"
+
+    @property
+    def database_url_segura(self) -> str:
+        """A URL do banco sem a senha, para poder aparecer em mensagem de erro."""
+        return re.sub(r"://([^:/@]+):[^@]*@", r"://\1:***@", self.database_url)
 
 
 @lru_cache(maxsize=1)

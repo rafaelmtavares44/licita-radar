@@ -10,7 +10,10 @@ services:
       POSTGRES_PASSWORD: licita
       POSTGRES_DB: licita_radar
     ports:
-      - "5432:5432"
+      # Muita gente já tem um Postgres instalado ocupando a 5432. Se este
+      # container não subir com "port is already allocated", ponha
+      # LR_DB_PORT=5433 no .env — só a porta de fora muda.
+      - "${LR_DB_PORT:-5432}:5432"
     volumes:
       - dados_pg:/var/lib/postgresql/data
     healthcheck:

@@ -49,6 +49,13 @@ licita-radar ingest --uf GO
 licita-radar listar
 ```
 
+> [!TIP]
+> **Já tem um Postgres instalado na máquina?** Não precisa desinstalar nem
+> lembrar a senha dele — o `docker compose` sobe um container próprio, com
+> usuário e senha `licita`. Se o compose reclamar que *a porta já está em
+> uso*, ponha `LR_DB_PORT=5433` no `.env`, troque a porta também na
+> `LR_DATABASE_URL`, e suba de novo.
+
 ### Os comandos
 
 | Comando | O que faz |

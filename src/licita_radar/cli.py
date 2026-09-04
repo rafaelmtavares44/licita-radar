@@ -21,7 +21,7 @@ from licita_radar.matching.encoder import FastEmbedEncoder, similaridade_cosseno
 from licita_radar.matching.limpeza import limpar_objeto
 from licita_radar.matching.pontuacao import Avaliacao, Veredito, avaliar, explicar
 from licita_radar.matching.semantico import MotorSemantico
-from licita_radar.storage.db import Banco, migrar
+from licita_radar.storage.db import Banco, ErroDeBanco, migrar
 from licita_radar.storage.matching_repo import AvaliacaoRepo, EmbeddingRepo, MatchingRepo
 from licita_radar.storage.repositories import ContratacaoRepo, ExecucaoRepo
 
@@ -39,6 +39,18 @@ def _configurar_log() -> None:
         format="%(asctime)s %(levelname)-7s %(name)s — %(message)s",
         datefmt="%H:%M:%S",
     )
+    # O pool grita um aviso por tentativa de conexão. Quando o banco está
+    # fora do ar, isso vira uma parede de texto antes da mensagem útil.
+    logging.getLogger("psycopg.pool").setLevel(logging.ERROR)
+
+
+def _rodar(corrotina: Any) -> Any:
+    """Executa e traduz falha de banco em recado, não em stack trace."""
+    try:
+        return asyncio.run(corrotina)
+    except ErroDeBanco as erro:
+        console.print(f"[bold red]{erro}[/bold red]")
+        raise typer.Exit(code=1) from erro
 
 
 def _carregar_ou_sair(caminho: Path) -> Perfil:
@@ -67,7 +79,7 @@ def cmd_migrar() -> None:
         async with Banco() as banco:
             return await migrar(banco)
 
-    aplicadas = asyncio.run(_executar())
+    aplicadas = _rodar(_executar())
     if aplicadas:
         for nome in aplicadas:
             console.print(f"[green]aplicada[/green] {nome}")
@@ -162,7 +174,7 @@ def cmd_ingest(
                 f"total no banco: {await repo.contar()}"
             )
 
-    asyncio.run(_executar())
+    _rodar(_executar())
 
 
 @app.command("listar")
@@ -177,7 +189,7 @@ def cmd_listar(
         async with Banco() as banco:
             return await ContratacaoRepo(banco).listar_abertas(uf=uf, limite=limite)
 
-    linhas = asyncio.run(_executar())
+    linhas = _rodar(_executar())
     if not linhas:
         console.print("[dim]nada no banco ainda — rode `licita-radar ingest` antes[/dim]")
         return
@@ -262,7 +274,7 @@ def cmd_match(
             _mostrar_funil(avaliacoes)
             _mostrar_ranking(avaliacoes, limite=limite)
 
-    asyncio.run(_executar())
+    _rodar(_executar())
 
 
 def _mostrar_funil(avaliacoes: list[Avaliacao]) -> None:

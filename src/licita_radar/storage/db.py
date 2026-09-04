@@ -13,14 +13,24 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from psycopg import AsyncConnection
-from psycopg_pool import AsyncConnectionPool
+from psycopg import AsyncConnection, OperationalError
+from psycopg_pool import AsyncConnectionPool, PoolTimeout
 
 from licita_radar.config.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+
+class ErroDeBanco(RuntimeError):
+    """Não foi possível falar com o Postgres — sempre com dica de conserto.
+
+    Banco fora do ar é a falha mais comum de quem está começando, e um
+    stack trace de quarenta linhas depois de trinta segundos de espera é a
+    pior forma possível de comunicar isso.
+    """
+
 
 _CRIAR_CONTROLE = """
 CREATE TABLE IF NOT EXISTS schema_migracao (
@@ -37,12 +47,30 @@ class Banco:
         self._s = settings or get_settings()
         self._pool: AsyncConnectionPool | None = None
 
+    def _dica(self) -> str:
+        return (
+            f"Não consegui conectar no banco em {self._s.database_url_segura}.\n\n"
+            "  • O Postgres está rodando?   docker compose up -d db\n"
+            "  • Já subiu?  confira:        docker compose ps\n"
+            "  • Usa outro banco?           ajuste LR_DATABASE_URL no .env"
+        )
+
     async def abrir(self) -> None:
         if self._pool is None:
-            self._pool = AsyncConnectionPool(
-                self._s.database_url, min_size=1, max_size=5, open=False
+            pool = AsyncConnectionPool(
+                self._s.database_url,
+                min_size=1,
+                max_size=5,
+                open=False,
+                timeout=self._s.database_timeout_s,
             )
-            await self._pool.open(wait=True)
+            try:
+                await pool.open(wait=True, timeout=self._s.database_timeout_s)
+            except (PoolTimeout, OperationalError) as erro:
+                await pool.close()
+                raise ErroDeBanco(self._dica()) from erro
+
+            self._pool = pool
             logger.debug("pool de conexões aberto")
 
     async def fechar(self) -> None:

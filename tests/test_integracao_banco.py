@@ -20,7 +20,7 @@ import pytest
 
 from licita_radar.config.settings import Settings
 from licita_radar.ingest.modelos import Contratacao
-from licita_radar.storage.db import Banco, migrar
+from licita_radar.storage.db import Banco, ErroDeBanco, migrar
 from licita_radar.storage.repositories import ContratacaoRepo, ExecucaoRepo
 
 pytestmark = pytest.mark.integracao
@@ -58,6 +58,22 @@ async def banco():  # type: ignore[no-untyped-def]
             await conn.commit()
         await migrar(b)
         yield b
+
+
+async def test_banco_fora_do_ar_vira_recado_e_nao_stack_trace() -> None:
+    """Falha em segundos, com dica de conserto. Não exige banco nenhum."""
+    settings = Settings(
+        database_url="postgresql://ninguem:segredo@127.0.0.1:9/inexistente",
+        database_timeout_s=1.0,
+    )
+
+    with pytest.raises(ErroDeBanco) as capturado:
+        async with Banco(settings):
+            pass
+
+    mensagem = str(capturado.value)
+    assert "docker compose up -d db" in mensagem
+    assert "segredo" not in mensagem  # a senha nunca aparece na mensagem
 
 
 @sem_banco
