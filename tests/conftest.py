@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-import asyncio
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from licita_radar import plataforma
 from licita_radar.config.perfil import Perfil
 from licita_radar.config.settings import Settings
 
 # Mesma razão do cli.py: no Windows o psycopg não roda no ProactorEventLoop.
-if sys.platform == "win32":  # pragma: no cover
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+plataforma.ajustar_politica()
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pncp"
 

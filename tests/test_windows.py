@@ -5,8 +5,10 @@ rodar em modo assíncrono nele: a conexão morre com InterfaceError antes de
 tocar a rede. O sintoma é cruel — o container está de pé, a porta
 publicada, e o erro fala de conexão.
 
-A correção mora na importação de `cli.py` e de `conftest.py`. Este teste
-existe para ninguém remover achando que é linha morta.
+A correção mora em `licita_radar.plataforma`, em duas metades: a política
+(para quem chama `asyncio.run()`) e a fábrica de loop (para o uvicorn, que
+passa `loop_factory` explícito e com isso ignora a política). Este teste
+existe para ninguém remover nenhuma das duas achando que é linha morta.
 """
 
 from __future__ import annotations
@@ -16,15 +18,46 @@ import sys
 
 import pytest
 
-from licita_radar import cli
+from licita_radar import cli, plataforma
 from licita_radar.diagnostico import Estado, checar_event_loop
 
 
-def test_a_cli_troca_a_politica_de_event_loop_no_windows() -> None:
+def test_a_cli_ajusta_a_politica_na_importacao() -> None:
     fonte = inspect.getsource(cli)
+
+    assert "plataforma.ajustar_politica()" in fonte
+
+
+def test_a_politica_do_windows_e_a_selector() -> None:
+    fonte = inspect.getsource(plataforma)
 
     assert 'sys.platform == "win32"' in fonte
     assert "WindowsSelectorEventLoopPolicy" in fonte
+
+
+def test_o_servidor_recebe_a_nossa_fabrica_de_loop() -> None:
+    """O uvicorn passa `loop_factory` explícito, e isso ignora a política.
+
+    Sem esta linha, no Windows o servidor morre com InterfaceError do
+    psycopg antes de aceitar a primeira conexão — com a defesa instalada
+    e simplesmente pulada.
+    """
+    assert "loop=plataforma.CAMINHO_DA_FABRICA" in inspect.getsource(cli)
+    assert plataforma.CAMINHO_DA_FABRICA == "licita_radar.plataforma:fabrica_de_loop"
+
+
+def test_a_fabrica_devolve_um_loop_utilizavel() -> None:
+    loop = plataforma.fabrica_de_loop()
+    try:
+        assert loop.run_until_complete(_um()) == 1
+        if sys.platform == "win32":  # pragma: no cover
+            assert "Proactor" not in type(loop).__name__
+    finally:
+        loop.close()
+
+
+async def _um() -> int:
+    return 1
 
 
 def test_o_doctor_verifica_o_event_loop() -> None:

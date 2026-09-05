@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -17,6 +16,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
+from licita_radar import plataforma
 from licita_radar.analise.analista import ASSUNTOS, ROTULOS, analisar_edital
 from licita_radar.analise.extracao import ler_documentos
 from licita_radar.config.perfil import ErroDePerfil, Perfil, carregar_perfil
@@ -44,14 +44,10 @@ from licita_radar.storage.db import Banco, ErroDeBanco, migrar
 from licita_radar.storage.matching_repo import AvaliacaoRepo, EmbeddingRepo, MatchingRepo
 from licita_radar.storage.repositories import ContratacaoRepo, ExecucaoRepo
 
-# ---------------------------------------------------------------------------
-# No Windows, o asyncio usa o ProactorEventLoop por padrão, e o psycopg
-# recusa rodar em modo assíncrono nele — a conexão falha com InterfaceError
-# antes mesmo de tocar a rede. Isto precisa acontecer na importação, antes
-# de qualquer asyncio.run(), e não custa nada nos outros sistemas.
-if sys.platform == "win32":  # pragma: no cover — só roda no Windows
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-# ---------------------------------------------------------------------------
+# No Windows o psycopg não roda no ProactorEventLoop. Isto precisa
+# acontecer na importação, antes de qualquer asyncio.run(). Ver
+# `licita_radar.plataforma` para o porquê e para a outra metade do conserto.
+plataforma.ajustar_politica()
 
 app = typer.Typer(
     add_completion=False,
@@ -622,11 +618,13 @@ def cmd_servir(
         host=host,
         port=porta,
         reload=recarregar,
-        # No Windows o uvicorn herda a política de event loop que este
-        # módulo já ajustou na importação. `uvloop` mudaria isso, e o
-        # psycopg assíncrono não sobrevive ao Proactor — ver o topo do
-        # arquivo.
-        loop="asyncio",
+        # O uvicorn roda `asyncio.run(serve(), loop_factory=...)`, e um
+        # loop_factory explícito IGNORA a política de event loop. A defesa
+        # do Windows continuava instalada e era pulada — no Windows o
+        # servidor morria com InterfaceError do psycopg antes de aceitar a
+        # primeira conexão. Passar a nossa fábrica por nome é o que faz a
+        # correção alcançar também o processo filho do --recarregar.
+        loop=plataforma.CAMINHO_DA_FABRICA,
         # O log fica com o uvicorn de propósito. Com `log_config=None` ele
         # emudece: some o "Uvicorn running on...", somem os erros de
         # subida, e um servidor que falhou ao levantar fica idêntico a um
