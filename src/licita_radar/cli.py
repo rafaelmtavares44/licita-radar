@@ -605,13 +605,15 @@ def cmd_servir(
 
     from licita_radar.api.app import PAINEL
 
-    console.print(f"[bold green]http://{host}:{porta}[/bold green]")
-    if not PAINEL.is_dir():
+    if PAINEL.is_dir():
+        console.print(f"[bold green]painel:[/bold green] http://{host}:{porta}")
+    else:
         console.print(
-            "[dim]painel ainda não construído — servindo só a API.[/dim]\n"
-            f"[dim]documentação interativa: http://{host}:{porta}/docs[/dim]\n"
+            "[dim]o painel ainda não foi construído — servindo só a API.[/dim]\n"
+            f"[bold green]documentação interativa:[/bold green] http://{host}:{porta}/docs\n"
             "[dim]para a tela: cd web && npm install && npm run dev[/dim]"
         )
+    console.print("[dim]a primeira subida carrega o modelo de embeddings: aguarde…[/dim]\n")
 
     uvicorn.run(
         "licita_radar.api.app:criar_app",
@@ -624,7 +626,11 @@ def cmd_servir(
         # psycopg assíncrono não sobrevive ao Proactor — ver o topo do
         # arquivo.
         loop="asyncio",
-        log_config=None,
+        # O log fica com o uvicorn de propósito. Com `log_config=None` ele
+        # emudece: some o "Uvicorn running on...", somem os erros de
+        # subida, e um servidor que falhou ao levantar fica idêntico a um
+        # servidor que está demorando.
+        access_log=False,
     )
 
 
