@@ -6,7 +6,7 @@ Aviso de Contratação Direta 1/2026 do IF/AL.
 
 from __future__ import annotations
 
-from licita_radar.analise.numeros import extrair, nao_sustentados, por_extenso
+from licita_radar.analise.numeros import e_referencia, extrair, nao_sustentados, por_extenso
 
 
 class TestOCasoQueOriginouOModulo:
@@ -87,3 +87,51 @@ class TestQuandoNaoHaNumero:
             "3",
             "6",
         ]
+
+
+class TestNumeracaoNaoEValor:
+    """Ponteiro para cláusula não é afirmação factual.
+
+    Saiu do segundo edital real: a frase "Multa de 20% ... nos subitens
+    11.1.1 a 11.1.12" afirma *um* número — os vinte por cento. Os outros
+    dois são endereços, e cobrar prova deles acendia alarme amarelo na
+    linha em que o número que importa estava certo.
+    """
+
+    TRECHO = (
+        "11.1.15. Multa de 20% (vinte por cento) sobre o valor estimado do(s) item(s) "
+        "prejudicado(s) pela conduta do fornecedor"
+    )
+
+    def test_subitens_citados_nao_precisam_de_prova(self) -> None:
+        afirmacao = (
+            "Multa de 20% sobre o valor do item em caso de infrações previstas "
+            "nos subitens 11.1.1 a 11.1.12."
+        )
+        assert nao_sustentados(afirmacao, self.TRECHO) == []
+
+    def test_dois_separadores_ja_denunciam_o_endereco(self) -> None:
+        assert e_referencia("11.1.12")
+        assert e_referencia("7.27.1")
+        assert not e_referencia("65.001,91")  # dois separadores, mas é dinheiro
+        assert not e_referencia("1.000.000")  # milhar vem em trincas
+        assert not e_referencia("20")
+
+    def test_a_palavra_ao_lado_denuncia_o_resto(self) -> None:
+        assert e_referencia("14133", "conforme a Lei 14133 de 2021")
+        assert e_referencia("7.2", "na forma do subitem 7.2 do edital")
+        assert not e_referencia("7.2", "índice de liquidez de 7.2")
+
+    def test_o_numero_que_importa_continua_sendo_cobrado(self) -> None:
+        """A regra afrouxa endereço, não valor."""
+        afirmacao = "Multa de 15% conforme os subitens 11.1.1 a 11.1.12."
+        assert nao_sustentados(afirmacao, self.TRECHO) == ["15"]
+
+    def test_o_caso_das_duas_horas_continua_pego(self) -> None:
+        """O acerto de verdade do segundo edital: regra colada em trecho alheio."""
+        trecho = (
+            "É dever do fornecedor atualizar previamente as comprovações constantes "
+            "do Sicaf para que estejam vigentes na data da abertura da sessão pública"
+        )
+        afirmacao = "Enviar documentos complementares em até 2 horas pode excluir empresas."
+        assert nao_sustentados(afirmacao, trecho) == ["2"]

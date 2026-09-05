@@ -103,6 +103,27 @@ todo, e reprovar isso seria trocar alucinação por falso alarme. E o token
 numérico carrega a pontuação, senão o `15` de `11.1.15` — a numeração da
 cláusula — provaria a multa de 15%.
 
+### Número não é numeração
+
+A primeira versão da regra acendia alarme em `11.1.1` e `11.1.12` na frase
+*"Multa de 20% em caso de infrações dos subitens 11.1.1 a 11.1.12"* — onde
+o único número afirmado é o percentual, e os outros dois são endereços de
+parágrafo. Alarme falso na linha em que o número que importa está certo é
+pior que alarme nenhum: ensina a ignorar o símbolo.
+
+Ponteiro de cláusula fica de fora da cobrança, reconhecido por dois
+sinais: dois ou mais pontos com grupos que não são trincas (`11.1.12` é
+cláusula, `1.000.000` e `65.001,91` são dinheiro), ou a palavra que
+anuncia referência ao lado — subitem, inciso, artigo, lei.
+
+O que sobrou é o caso que a regra existe para pegar, e ele apareceu no
+mesmo edital: *"enviar documentos complementares em até 2 horas"*, citando
+um trecho que fala só do dever de manter o SICAF atualizado. As duas horas
+existem na legislação — não naquele trecho. O modelo colou uma regra que
+sabe de cor num parágrafo sobre outro assunto, que é a alucinação mais
+difícil de perceber lendo por cima, porque tudo ali é verdade menos o
+vínculo.
+
 Daí os três estados:
 
 | | significado |

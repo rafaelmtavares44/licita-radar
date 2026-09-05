@@ -122,12 +122,81 @@ def _formas(token: str) -> set[str]:
     return formas
 
 
-def extrair(texto: str) -> list[str]:
-    """Os números citados no texto, na ordem, sem repetição."""
+#: Palavras que transformam o número seguinte (ou anterior) em endereço.
+_PALAVRAS_DE_REFERENCIA = (
+    "subitem",
+    "subitens",
+    "item",
+    "itens",
+    "clausula",
+    "clausulas",
+    "inciso",
+    "incisos",
+    "alinea",
+    "alineas",
+    "artigo",
+    "art",
+    "anexo",
+    "lei",
+    "decreto",
+    "in ",
+    "portaria",
+)
+
+
+def e_referencia(token: str, contexto: str = "") -> bool:
+    """O token é um endereço de cláusula, não um valor.
+
+    "Multa de 20% em caso de infração dos subitens 11.1.1 a 11.1.12" afirma
+    **um** número: os vinte por cento. Os outros dois são ponteiros para
+    outro parágrafo — cobrar que a citação os contenha é pedir prova de
+    endereço, e enche a tela de alarme falso justamente na linha em que o
+    número que importa está certo.
+
+    Dois sinais bastam: dois ou mais separadores (`11.1.12` não é
+    quantidade nenhuma) ou a palavra que anuncia referência ao lado.
+    """
+    if _so_pontos_e_grupos_curtos(token):
+        return True
+
+    alvo = sem_acento(contexto)
+    for posicao in _posicoes(alvo, token):
+        antes = alvo[max(0, posicao - 40) : posicao]
+        if any(palavra in antes for palavra in _PALAVRAS_DE_REFERENCIA):
+            return True
+    return False
+
+
+def _so_pontos_e_grupos_curtos(token: str) -> bool:
+    """`11.1.12` é cláusula; `1.000.000` e `65.001,91` são dinheiro.
+
+    Contar separadores não separa os dois — `65.001,91` também tem dois. O
+    que separa é a forma dos grupos: milhar sempre vem em trincas, e
+    numeração de cláusula, não.
+    """
+    if "," in token or token.count(".") < 2:
+        return False
+    _, *grupos = token.split(".")
+    return not all(len(g) == 3 for g in grupos)
+
+
+def _posicoes(texto: str, token: str) -> list[int]:
+    return [m.start() for m in re.finditer(re.escape(token), texto)]
+
+
+def extrair(texto: str, *, com_referencias: bool = True) -> list[str]:
+    """Os números citados no texto, na ordem, sem repetição.
+
+    Com `com_referencias=False`, numeração de cláusula fica de fora — é o
+    que se quer ao perguntar "quais números esta frase afirma?".
+    """
     vistos: list[str] = []
     for achado in _TOKEN.findall(texto):
-        if achado not in vistos:
-            vistos.append(achado)
+        if achado in vistos:
+            continue
+        if not com_referencias and e_referencia(achado, texto):
+            continue
+        vistos.append(achado)
     return vistos
 
 
@@ -138,10 +207,12 @@ def nao_sustentados(afirmacao: str, trecho: str) -> list[str]:
     que ela cita estão na evidência.
     """
     alvo = sem_acento(trecho)
+    # O trecho conserva as referências: se a frase afirma "cláusula 7.2" e
+    # a citação traz "7.2", isso é apoio legítimo.
     tokens_do_trecho = set(extrair(trecho))
     ausentes: list[str] = []
 
-    for numero in extrair(afirmacao):
+    for numero in extrair(afirmacao, com_referencias=False):
         formas = _formas(numero)
         # o dígito precisa bater como token inteiro; o extenso, como palavra
         casou = bool(formas & tokens_do_trecho) or any(
