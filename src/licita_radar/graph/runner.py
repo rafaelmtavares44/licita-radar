@@ -11,6 +11,7 @@ from typing import Any
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 
+from licita_radar.alerta import construir_canal
 from licita_radar.config.perfil import Perfil
 from licita_radar.config.settings import Settings, get_settings
 from licita_radar.graph.build import compilar, configuracao
@@ -71,7 +72,10 @@ async def abrir_radar(
         api_key=s.llm_api_key,
         timeout_s=s.llm_timeout_s,
     )
-    deps = Dependencias(perfil=perfil, motor=motor, llm=llm)
+    canal = construir_canal(
+        token=s.telegram_token, chat_id=s.telegram_chat_id, timeout_s=s.telegram_timeout_s
+    )
+    deps = Dependencias(perfil=perfil, motor=motor, llm=llm, settings=s, canal=canal)
 
     async with AsyncPostgresSaver.from_conn_string(s.database_url) as checkpointer:
         await checkpointer.setup()

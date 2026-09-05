@@ -17,6 +17,8 @@ from rich.markup import escape
 from rich.table import Table
 
 from licita_radar import plataforma
+from licita_radar.alerta import construir_canal, mensagem_de_triagem
+from licita_radar.alerta.canal import ErroDoTelegram, Telegram
 from licita_radar.analise.analista import ASSUNTOS, ROTULOS, analisar_edital
 from licita_radar.analise.extracao import ler_documentos
 from licita_radar.config.perfil import ErroDePerfil, Perfil, carregar_perfil
@@ -331,6 +333,12 @@ def cmd_radar(
         else:
             console.print("\n[dim]nenhuma chegou à revisão desta vez[/dim]")
 
+        # O alerta de triagem sai aqui, e não depois de aprovar: aprovar é
+        # o que dispara a leitura do edital, então numa execução agendada
+        # ninguém teria aprovado nada e o canal ficaria mudo justamente na
+        # hora em que ele é mais útil.
+        await _avisar_da_triagem(aguardando, contratacoes)
+
     _rodar(_executar())
 
 
@@ -631,6 +639,136 @@ def cmd_servir(
         # servidor que está demorando.
         access_log=False,
     )
+
+
+async def _avisar_da_triagem(execucoes: list[Any], contratacoes: list[Any]) -> None:
+    """Manda para o celular o que ficou esperando decisão."""
+    s = get_settings()
+    canal = construir_canal(
+        token=s.telegram_token, chat_id=s.telegram_chat_id, timeout_s=s.telegram_timeout_s
+    )
+    if not canal.ativo or not execucoes:
+        return
+
+    por_numero = {c.numero_controle_pncp: c for c in contratacoes}
+    itens = []
+    for execucao in execucoes:
+        contratacao = por_numero.get(execucao.numero_controle)
+        itens.append(
+            {
+                "numero_controle": execucao.numero_controle,
+                "objeto": limpar_objeto(contratacao.objeto) if contratacao else "",
+                "orgao": contratacao.orgao_nome if contratacao else None,
+                "valor_estimado": contratacao.valor_estimado if contratacao else None,
+                "encerramento": contratacao.encerramento_proposta if contratacao else None,
+                "score": execucao.score,
+                "justificativa": execucao.justificativa,
+            }
+        )
+
+    entregue = await canal.enviar(mensagem_de_triagem(itens, painel=s.painel_url))
+    console.print(
+        "[dim]alerta enviado no Telegram[/dim]"
+        if entregue
+        else "[yellow]o alerta não foi entregue — veja o log[/yellow]"
+    )
+
+
+@app.command("alertar")
+def cmd_alertar(
+    teste: Annotated[
+        bool, typer.Option("--teste", help="Manda uma mensagem para conferir a configuração")
+    ] = False,
+    descobrir: Annotated[
+        bool, typer.Option("--descobrir", help="Mostra o chat_id de quem falou com o bot")
+    ] = False,
+) -> None:
+    """Confere o canal de alerta e ajuda a configurá-lo."""
+    _configurar_log()
+    s = get_settings()
+
+    if not s.telegram_token:
+        console.print(
+            "[bold red]LR_TELEGRAM_TOKEN não está configurado[/bold red]\n"
+            "1. no Telegram, fale com o @BotFather e mande /newbot\n"
+            "2. ponha o token no .env: LR_TELEGRAM_TOKEN=123456789:AA...\n"
+            "3. mande /start para o seu bot\n"
+            "4. rode: licita-radar alertar --descobrir"
+        )
+        raise typer.Exit(code=1)
+
+    bot = Telegram(
+        token=s.telegram_token,
+        chat_id=s.telegram_chat_id or "",
+        timeout_s=s.telegram_timeout_s,
+    )
+
+    async def _executar() -> None:
+        try:
+            nome = await bot.conferir()
+        except ErroDoTelegram as erro:
+            console.print(f"[bold red]{escape(str(erro))}[/bold red]")
+            raise typer.Exit(code=1) from erro
+        console.print(f"[green]✓[/green] bot [bold]@{nome}[/bold]")
+
+        if descobrir:
+            await _mostrar_chat_ids(s)
+            return
+
+        if not s.telegram_chat_id:
+            console.print(
+                "[yellow]falta LR_TELEGRAM_CHAT_ID[/yellow]\n"
+                "mande /start para o bot e rode: licita-radar alertar --descobrir"
+            )
+            raise typer.Exit(code=1)
+
+        console.print(f"[green]✓[/green] chat {s.telegram_chat_id}")
+        if teste:
+            ok = await bot.enviar(
+                "<b>licita-radar</b>\nCanal configurado. É por aqui que os alertas chegam."
+            )
+            console.print(
+                "[bold green]mensagem enviada[/bold green]"
+                if ok
+                else "[bold red]não foi entregue — veja o log acima[/bold red]"
+            )
+
+    _rodar(_executar())
+
+
+async def _mostrar_chat_ids(s: Any) -> None:
+    """Lê o `getUpdates` e mostra quem falou com o bot.
+
+    É o passo que a documentação do Telegram esconde: o chat_id não
+    aparece em lugar nenhum do aplicativo, e a forma de descobri-lo é
+    mandar uma mensagem para o bot e perguntar à API quem falou.
+    """
+    import httpx
+
+    url = f"https://api.telegram.org/bot{s.telegram_token}/getUpdates"
+    async with httpx.AsyncClient(timeout=s.telegram_timeout_s) as cliente:
+        resposta = await cliente.get(url)
+
+    conversas = {}
+    for atualizacao in resposta.json().get("result", []):
+        chat = (atualizacao.get("message") or {}).get("chat") or {}
+        if chat.get("id"):
+            conversas[str(chat["id"])] = chat.get("first_name") or chat.get("title") or "—"
+
+    if not conversas:
+        console.print(
+            "[yellow]ninguém falou com o bot ainda[/yellow]\n"
+            "abra o Telegram, procure o seu bot e mande /start — depois rode de novo"
+        )
+        return
+
+    tabela = Table(header_style="bold", title="Quem falou com o bot", title_justify="left")
+    tabela.add_column("chat_id")
+    tabela.add_column("nome")
+    for chat_id, nome in conversas.items():
+        tabela.add_row(chat_id, escape(nome))
+    console.print(tabela)
+    console.print("[dim]ponha o seu no .env: LR_TELEGRAM_CHAT_ID=...[/dim]")
 
 
 @app.command("doctor")

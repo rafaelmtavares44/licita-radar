@@ -106,6 +106,7 @@ problema com a instrução do conserto.
 | `licita-radar documentos` | Lista (e baixa, com `--baixar`) os anexos de uma contratação |
 | `licita-radar analisar` | Resume o edital com o trecho de origem em cada afirmação |
 | `licita-radar servir` | Sobe a API e o painel web |
+| `licita-radar alertar` | Confere o canal do Telegram e ajuda a configurá-lo |
 | `licita-radar doctor` | Diagnostica o ambiente quando algo não funciona |
 
 ### Onde procurar
@@ -143,6 +144,22 @@ npm run build                  # gera web/dist, que o `servir` passa a entregar
 ```
 
 Sem `web/dist`, o `servir` entrega só a API — e ela sozinha já é útil, com documentação interativa em `/docs`.
+
+### O alerta
+
+```bash
+licita-radar alertar --descobrir   # depois de mandar /start para o seu bot
+licita-radar alertar --teste
+```
+
+Dois avisos chegam, em momentos diferentes e por razões diferentes:
+
+- **quando o `radar` termina** — *"3 esperando a sua decisão"*, com objeto, órgão, prazo, score e a frase que explica por que apareceu
+- **quando você aprova** — o resumo do edital, com as marcas ✓ / ≈ / ?
+
+A separação não é detalhe. Aprovar é o que dispara a leitura do edital, então num `radar` agendado às 7h ninguém aprovou nada — se o alerta só existisse depois da aprovação, o canal ficaria mudo justamente na hora em que ele é mais útil.
+
+Sem token configurado, o canal fica desligado e o alerta vai para o log.
 
 ### Calibrando sem baixar modelo
 
@@ -229,7 +246,8 @@ A [API de consultas](https://pncp.gov.br/api/consulta/swagger-ui/index.html) é 
 | M3 | Grafo LangGraph com checkpoint e revisão humana | ✅ |
 | M4 | Analista de editais: download, extração e resumo com citação | ✅ |
 | M5 | Painel web: API HTTP e a tela de decisão | ✅ |
-| M6 | Alerta no Telegram e release `v0.1.0` | ⬜ |
+| M6 | Alerta no Telegram | ✅ |
+| M7 | Acabamento e release `v0.1.0` | ⬜ |
 
 O alerta desceu na fila de propósito: sem o resumo do edital, ele avisaria a mesma coisa que os portais de licitação já avisam. Fora do escopo, ainda: múltiplos perfis, API HTTP e OCR de edital digitalizado — estão em [`docs/roadmap.md`](docs/roadmap.md) esperando a vez.
 

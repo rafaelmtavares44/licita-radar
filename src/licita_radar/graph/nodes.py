@@ -13,6 +13,7 @@ from pathlib import Path
 
 from langgraph.types import interrupt
 
+from licita_radar.alerta import Canal, CanalDesligado, mensagem_da_analise
 from licita_radar.analise.analista import analisar_edital
 from licita_radar.analise.extracao import ler_documentos
 from licita_radar.config.perfil import Perfil
@@ -45,6 +46,7 @@ class Dependencias:
     motor: MotorSemantico
     llm: LLM
     settings: Settings = field(default_factory=get_settings)
+    canal: Canal = field(default_factory=CanalDesligado)
 
 
 # --------------------------------------------------------------- camada 1
@@ -284,10 +286,35 @@ async def analisar(estado: EditalState, deps: Dependencias) -> EditalState:
 # ------------------------------------------------------------------- fim
 
 
-def notificar(estado: EditalState) -> EditalState:
-    """O alerta em si. O canal entra no M4; aqui fica o registro."""
-    logger.info("ALERTA %s — %s", estado.get("numero_controle"), estado.get("justificativa"))
-    return EditalState(situacao="notificada", trilha=["notificar"])
+async def notificar(estado: EditalState, deps: Dependencias) -> EditalState:
+    """O alerta com o resumo do edital, para quem aprovou.
+
+    Falhar aqui não desfaz nada: a licitação foi aprovada, o edital foi
+    lido e a análise está gravada. Um alerta que não sai é um aborrecimento;
+    uma execução que morre no último nó jogaria fora o trabalho todo.
+    """
+    numero = estado.get("numero_controle", "")
+    analise = estado.get("analise") or {}
+
+    if not deps.canal.ativo:
+        logger.info("ALERTA %s — %s", numero, estado.get("justificativa"))
+        return EditalState(situacao="notificada", trilha=["notificar:log"])
+
+    texto = mensagem_da_analise(
+        analise,
+        objeto=limpar_objeto(estado.get("objeto", "")),
+        numero_controle=numero,
+    )
+    try:
+        entregue = await deps.canal.enviar(texto)
+    except Exception as erro:  # canal quebrado não cancela a aprovação
+        logger.warning("o alerta de %s não saiu: %s", numero, erro)
+        entregue = False
+
+    return EditalState(
+        situacao="notificada",
+        trilha=["notificar" if entregue else "notificar:falhou"],
+    )
 
 
 def arquivar(estado: EditalState) -> EditalState:

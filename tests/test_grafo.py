@@ -125,7 +125,11 @@ class TestPausaHumana:
 
         assert final["situacao"] == "notificada"
         assert final["decisao_humana"] == "aprovada"
-        assert final["trilha"][-3:] == ["revisar:aprovada", "analisar:sem_download", "notificar"]
+        assert final["trilha"][-3:] == [
+            "revisar:aprovada",
+            "analisar:sem_download",
+            "notificar:log",
+        ]
 
     async def test_rejeitar_arquiva_com_o_comentario(self, perfil: Perfil) -> None:
         app = compilar(_deps(perfil), checkpointer=InMemorySaver())
@@ -302,7 +306,7 @@ class TestAnaliseDoEdital:
         assert analise["confiabilidade"] == 0.5
         assert final["documentos"][0]["titulo"] == "Edital.txt"
         assert final["situacao"] == "notificada"
-        assert final["trilha"][-2:] == ["analisar", "notificar"]
+        assert final["trilha"][-2:] == ["analisar", "notificar:log"]
 
     @respx.mock
     async def test_texto_do_edital_nao_vai_para_o_checkpoint(
@@ -472,3 +476,65 @@ class TestModeloDeRaciocinio:
         assert "similaridade" in estado["justificativa"]
         assert estado["tokens_gastos"] == 500  # o gasto é registrado mesmo assim
         assert estado["trilha"][-1] == "justificar:vazia"
+
+
+class TestAlertaDepoisDeAprovar:
+    """O canal é opcional, e falhar nele não desfaz a aprovação."""
+
+    class CanalFalso:
+        def __init__(self, quebrado: bool = False) -> None:
+            self.enviadas: list[str] = []
+            self.quebrado = quebrado
+
+        @property
+        def ativo(self) -> bool:
+            return True
+
+        async def enviar(self, texto: str) -> bool:
+            if self.quebrado:
+                raise RuntimeError("Telegram fora do ar")
+            self.enviadas.append(texto)
+            return True
+
+    async def _aprovar(self, perfil: Perfil, canal: Any, numero: str) -> Any:
+        deps = _deps(perfil)
+        deps.canal = canal
+        app = compilar(deps, checkpointer=InMemorySaver())
+        config = configuracao(numero)
+        await app.ainvoke(
+            _entrada("Desenvolvimento de software e sustentação de sistemas", perfil, numero),
+            config=config,
+        )
+        return await app.ainvoke(Command(resume={"decisao": "aprovar"}), config=config)
+
+    async def test_aprovar_manda_o_resumo_para_o_canal(self, perfil: Perfil) -> None:
+        canal = self.CanalFalso()
+
+        final = await self._aprovar(perfil, canal, "X-5-1/2026")
+
+        assert len(canal.enviadas) == 1
+        assert "Desenvolvimento de software" in canal.enviadas[0]
+        assert final["trilha"][-1] == "notificar"
+
+    async def test_canal_quebrado_nao_desfaz_a_aprovacao(self, perfil: Perfil) -> None:
+        """A licitação foi aprovada e o edital foi lido: isso está gravado."""
+        final = await self._aprovar(perfil, self.CanalFalso(quebrado=True), "X-5-2/2026")
+
+        assert final["situacao"] == "notificada"
+        assert final["decisao_humana"] == "aprovada"
+        assert final["trilha"][-1] == "notificar:falhou"
+
+    async def test_rejeitada_nao_vira_alerta(self, perfil: Perfil) -> None:
+        canal = self.CanalFalso()
+        deps = _deps(perfil)
+        deps.canal = canal
+        app = compilar(deps, checkpointer=InMemorySaver())
+        config = configuracao("X-5-3/2026")
+        await app.ainvoke(
+            _entrada("Desenvolvimento de software e sustentação de sistemas", perfil, "X-5-3/2026"),
+            config=config,
+        )
+
+        await app.ainvoke(Command(resume={"decisao": "rejeitar"}), config=config)
+
+        assert canal.enviadas == []

@@ -77,12 +77,15 @@ def construir_grafo(deps: Dependencias) -> Any:
     async def _analisar(estado: EditalState) -> EditalState:
         return await nodes.analisar(estado, deps)
 
+    async def _notificar(estado: EditalState) -> EditalState:
+        return await nodes.notificar(estado, deps)
+
     grafo.add_node("triar", _sincrono(nodes.triar))
     grafo.add_node("pontuar", _sincrono(nodes.pontuar))
     grafo.add_node("justificar", _justificar)
     grafo.add_node("revisar", nodes.revisar)
     grafo.add_node("analisar", _analisar)
-    grafo.add_node("notificar", nodes.notificar)
+    grafo.add_node("notificar", _notificar)
     grafo.add_node("arquivar", nodes.arquivar)
 
     grafo.add_edge(START, "triar")

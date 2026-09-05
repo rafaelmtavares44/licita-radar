@@ -81,6 +81,18 @@ class Settings(BaseSettings):
     llm_api_key: str | None = None
     llm_timeout_s: float = 60.0
 
+    # --- alerta (opcional) ---
+    # Sem token e chat_id, os alertas ficam só no log e o projeto roda
+    # igual — mesma regra do LLM. O token vem do @BotFather; o chat_id,
+    # de `licita-radar alertar --descobrir`.
+    telegram_token: str | None = None
+    telegram_chat_id: str | None = None
+    telegram_timeout_s: float = 20.0
+
+    #: Endereço do painel, para o alerta virar um link clicável em vez de
+    #: um comando para digitar no computador que a pessoa não está usando.
+    painel_url: str | None = None
+
     # --- perfil ---
     perfil_path: Path = Path("perfil.yaml")
 

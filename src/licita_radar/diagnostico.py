@@ -244,6 +244,47 @@ async def checar_postgres(settings: Settings) -> list[Checagem]:
     return resultado
 
 
+async def checar_alerta(settings: Settings) -> Checagem:
+    """Confere o bot e o destino, não só se as variáveis estão preenchidas.
+
+    O erro mais comum não é token errado: é o chat_id faltando ou o bot
+    nunca ter recebido um /start. Nos dois casos a configuração *parece*
+    completa e a mensagem simplesmente não chega — que é o pior tipo de
+    falha para um canal de alerta.
+    """
+    from licita_radar.alerta.canal import ErroDoTelegram, Telegram
+
+    if not settings.telegram_token:
+        return Checagem(
+            "Alerta",
+            "Telegram",
+            Estado.AVISO,
+            "não configurado",
+            "opcional: sem ele o alerta fica só no log — veja `licita-radar alertar`",
+        )
+
+    bot = Telegram(
+        token=settings.telegram_token,
+        chat_id=settings.telegram_chat_id or "",
+        timeout_s=min(settings.telegram_timeout_s, 15.0),
+    )
+    try:
+        nome = await bot.conferir()
+    except ErroDoTelegram as erro:
+        return Checagem("Alerta", "Telegram", Estado.FALHA, "token recusado", str(erro))
+
+    if not settings.telegram_chat_id:
+        return Checagem(
+            "Alerta",
+            "Telegram",
+            Estado.FALHA,
+            f"@{nome} responde, mas falta o destino",
+            "mande /start para o bot e rode: licita-radar alertar --descobrir",
+        )
+
+    return Checagem("Alerta", "Telegram", Estado.OK, f"@{nome} → {settings.telegram_chat_id}")
+
+
 async def checar_llm(settings: Settings) -> Checagem:
     """Testa a chave com a menor requisição possível.
 
@@ -376,6 +417,7 @@ async def diagnosticar(settings: Settings, *, com_pncp: bool = True) -> list[Che
         ]
 
     checagens.append(await checar_llm(settings))
+    checagens.append(await checar_alerta(settings))
 
     if com_pncp:
         checagens.append(await checar_pncp(settings))
