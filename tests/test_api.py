@@ -264,3 +264,40 @@ class TestMensagemNaoEMarcacao:
         gravador.print('instale com: pip install -e ".[web]"')
 
         assert "[web]" not in gravador.export_text()
+
+
+class TestQuandoOPainelNaoFoiConstruido:
+    """`{"detail":"Not Found"}` na raiz é verdade e não ajuda ninguém.
+
+    Quem acabou de subir o servidor pela primeira vez não sabe que a tela
+    é construída à parte. A raiz explica; o resto continua 404 de verdade.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_raiz_ensina_a_construir(self, contexto: Contexto) -> None:
+        app = criar_app(servir_painel=False)
+        app.dependency_overrides[obter_contexto] = lambda: contexto
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://teste"
+        ) as http:
+            resposta = await http.get("/")
+
+        assert resposta.status_code == 200
+        assert "npm run build" in resposta.text
+        assert "/docs" in resposta.text
+
+    @pytest.mark.asyncio
+    async def test_a_explicacao_nao_engole_os_404_da_api(self, contexto: Contexto) -> None:
+        """Uma rota coringa aqui esconderia erro de verdade da API."""
+        app = criar_app(servir_painel=False)
+        app.dependency_overrides[obter_contexto] = lambda: contexto
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://teste"
+        ) as http:
+            inexistente = await http.get("/api/nao-existe")
+            outra = await http.get("/qualquer/coisa")
+
+        assert inexistente.status_code == 404
+        assert outra.status_code == 404

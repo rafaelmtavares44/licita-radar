@@ -17,7 +17,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from licita_radar.api import servico
@@ -137,6 +137,8 @@ def criar_app(settings: Settings | None = None, *, servir_painel: bool = True) -
 
     if servir_painel and PAINEL.is_dir():
         _montar_painel(app)
+    else:
+        _explicar_a_ausencia_do_painel(app)
 
     return app
 
@@ -156,3 +158,45 @@ def _montar_painel(app: FastAPI) -> None:
         if caminho and arquivo.is_file():
             return FileResponse(arquivo)
         return FileResponse(PAINEL / "index.html")
+
+
+#: Sem `web/dist`, a raiz não tem rota e o FastAPI devolve
+#: `{"detail":"Not Found"}` — que é verdade e não ajuda ninguém. Quem
+#: acabou de subir o servidor quer saber o que fazer, não o código HTTP.
+_SEM_PAINEL = """<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<title>licita-radar — o painel ainda não foi construído</title>
+<style>
+ body{margin:0;display:grid;place-items:center;min-height:100vh;background:#f7f5f1;color:#12161f;
+      font:15px/1.6 "Segoe UI",system-ui,sans-serif}
+ main{max-width:52ch;padding:32px}
+ h1{font-size:20px;margin:0 0 6px}
+ p{color:#4b5567}
+ pre{background:#fff;border:1px solid #e2ded4;border-left:3px solid #2f4fcb;
+     border-radius:0 8px 8px 0;padding:14px 16px;overflow-x:auto;
+     font-family:Consolas,monospace;font-size:13.5px}
+ a{color:#2f4fcb}
+ @media(prefers-color-scheme:dark){body{background:#0f131b;color:#eceef3}p{color:#a3acbf}
+   pre{background:#171c26;border-color:#262d3a;border-left-color:#8fa4ff}a{color:#8fa4ff}}
+</style></head><body><main>
+<h1>A API está no ar. O painel, ainda não.</h1>
+<p>A tela é construída à parte e não vem pronta no repositório. Uma vez só:</p>
+<pre>cd web
+npm install
+npm run build</pre>
+<p>Depois reinicie o <code>licita-radar servir</code> e recarregue esta página.</p>
+<p>Enquanto isso, a API funciona sozinha —
+<a href="/docs">documentação interativa em /docs</a>.</p>
+</main></body></html>"""
+
+
+def _explicar_a_ausencia_do_painel(app: FastAPI) -> None:
+    """Uma página em vez de um 404 quando `web/dist` não existe.
+
+    Só na raiz, e não como rota coringa: uma coringa aqui capturaria
+    qualquer caminho e esconderia os 404 verdadeiros da API.
+    """
+
+    @app.get("/", include_in_schema=False)
+    async def raiz() -> HTMLResponse:
+        return HTMLResponse(_SEM_PAINEL)
