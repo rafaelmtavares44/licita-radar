@@ -73,7 +73,10 @@ garantia alta), sempre com o trecho.
 5. Números, prazos e percentuais devem vir exatamente como aparecem no edital.
 6. Se você afirmar um número, o "trecho" DEVE conter esse número. Quando o \
 edital não informa o valor (aparece em branco, "___" ou "%" sozinho), diga que \
-não está informado — nunca complete com um valor típico."""
+não está informado — nunca complete com um valor típico.
+7. Uma afirmação, uma cláusula. Se a informação vem de dois pontos diferentes \
+do edital, gere DUAS afirmações, cada uma com o seu trecho — nunca junte numa \
+frase só citando apenas uma delas."""
 
 
 def prompt_analise(*, objeto: str, edital: str, faltantes: list[str]) -> str:
