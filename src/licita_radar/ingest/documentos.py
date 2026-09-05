@@ -100,6 +100,9 @@ class Documento:
         — no Windows, qualquer um deles derruba a gravação.
         """
         base = re.sub(r"[^\w.\- ]+", "_", self.titulo).strip()[:80] or "documento"
+        # "Minuta de Contrato.pdf" + ".pdf" daria "Minuta de Contrato.pdf.pdf"
+        if self.extensao and base.lower().endswith(self.extensao):
+            base = base[: -len(self.extensao)]
         chave = numero_controle.replace("/", "-")
         return f"{chave}_{self.sequencial:02d}_{base}{self.extensao}"
 

@@ -113,3 +113,76 @@ def test_conferir_todas_marca_cada_afirmacao() -> None:
 
 def test_taxa_de_lista_vazia_nao_explode() -> None:
     assert taxa_de_confirmacao([]) == 0.0
+
+
+class TestNumeroSemApoio:
+    """Citação verdadeira não é o mesmo que afirmação sustentada.
+
+    O caso real: o modelo citou "11.1.15. Multa de % ( por cento) sobre o
+    valor estimado…" — frase que está mesmo no edital, porque a extração
+    do PDF tinha jogado o "20 vinte" para o fim da linha — e afirmou que a
+    multa era de 15%. A citação passou. O número era invenção.
+    """
+
+    TRECHO_COM_LACUNA = (
+        "11.1.15. Multa de % ( por cento) sobre o valor estimado do(s) item(s) "
+        "prejudicado(s) pela conduta do fornecedor, por qualquer das infrações"
+    )
+    EDITAL_COM_LACUNA = "Das sanções administrativas\n" + TRECHO_COM_LACUNA
+
+    def test_estado_intermediario_nao_e_confirmado_nem_invencao(self) -> None:
+        afirmacao = Afirmacao(
+            assunto="penalidades",
+            texto="Multas podem chegar a 15% do valor da contratação.",
+            trecho=self.TRECHO_COM_LACUNA,
+        )
+        (conferida,) = conferir_todas([afirmacao], self.EDITAL_COM_LACUNA)
+
+        assert conferida.confirmada  # a citação existe mesmo
+        assert not conferida.sustentada  # mas não prova os 15%
+        assert conferida.estado == "numero_sem_apoio"
+        assert conferida.numeros_sem_apoio == ["15"]
+        assert "15" in conferida.observacao
+
+    def test_a_taxa_conta_o_que_da_para_repetir_sem_ressalva(self) -> None:
+        edital = self.EDITAL_COM_LACUNA + "\n7.27. O pagamento em até dez dias úteis."
+        afirmacoes = [
+            Afirmacao(
+                assunto="penalidades",
+                texto="Multa de 15% do valor.",
+                trecho=self.TRECHO_COM_LACUNA,
+            ),
+            Afirmacao(
+                assunto="prazos",
+                texto="Pagamento em até 10 dias úteis.",
+                trecho="7.27. O pagamento em até dez dias úteis.",
+            ),
+        ]
+        conferidas = conferir_todas(afirmacoes, edital)
+
+        # as duas citações são reais; só uma sustenta o número que afirma
+        assert all(a.confirmada for a in conferidas)
+        assert taxa_de_confirmacao(conferidas) == 0.5
+
+    def test_numero_escrito_por_extenso_na_fonte_sustenta_o_digito(self) -> None:
+        edital = "7.27. O pagamento será efetuado no prazo máximo de até dez dias úteis."
+        afirmacao = Afirmacao(
+            assunto="prazos",
+            texto="O pagamento deverá ser efetuado em até 10 dias úteis.",
+            trecho="O pagamento será efetuado no prazo máximo de até dez dias úteis",
+        )
+        (conferida,) = conferir_todas([afirmacao], edital)
+
+        assert conferida.sustentada
+        assert conferida.estado == "sustentada"
+
+    def test_citacao_inventada_nem_chega_a_conferir_numero(self) -> None:
+        afirmacao = Afirmacao(
+            assunto="garantia",
+            texto="Exige garantia de 5%.",
+            trecho="será exigida garantia de execução de 5% do valor do contrato",
+        )
+        (conferida,) = conferir_todas([afirmacao], self.EDITAL_COM_LACUNA)
+
+        assert conferida.estado == "nao_encontrada"
+        assert conferida.numeros_sem_apoio == []

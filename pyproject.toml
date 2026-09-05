@@ -41,6 +41,8 @@ grafo = [
 # Leitura de edital. Fica separado porque `ingest`, `match` e `radar` não
 # precisam abrir PDF nenhum — só o `analisar` precisa.
 documentos = [
+    # >=4.0 pelo extraction_mode="layout": sem ele, número em objeto de
+    # texto separado vai parar no fim da linha e some do lugar dele.
     "pypdf>=5.0",
 ]
 dev = [

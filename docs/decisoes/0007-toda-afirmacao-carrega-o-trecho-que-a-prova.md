@@ -65,13 +65,61 @@ voltar atrás. Setenta por cento confirma.
 Trechos com menos de seis palavras não passam por isso: para eles exige-se
 literalidade, porque cinco palavras soltas coincidem por acaso.
 
+## A citação existir não é a citação provar
+
+Isto foi descoberto no primeiro edital real, e é a razão de existirem três
+estados e não dois. O modelo devolveu:
+
+> **Multas podem chegar a 15%** do valor da contratação
+> citando `"11.1.15. Multa de % ( por cento) sobre o valor estimado…"`
+
+A citação **passou na conferência, corretamente**: aquela frase está no
+edital, exatamente assim. O que estava errado era o resto da cadeia.
+
+A extração do PDF, no modo padrão do pypdf, tinha jogado o número para o
+fim da linha — `"…pela conduta do20 vinte"` — deixando uma lacuna no lugar
+dele. O modelo leu `"Multa de __%"`, precisou de um valor e escreveu 15%:
+plausível, redondo, e errado. **O edital dizia 20%.** Extração ruim não
+produz resumo incompleto; produz resumo inventado.
+
+Duas mudanças saíram daí:
+
+1. **A extração passa a usar `extraction_mode="layout"`**, que respeita a
+   posição do texto na página. O mesmo trecho volta como
+   `"Multa de 20% (vinte por cento)"`.
+2. **Os números da afirmação são conferidos contra a citação**, um a um.
+   Se a frase diz 15% e o trecho não contém 15, ela não é sustentada —
+   mesmo com a citação confirmada.
+
+O segundo item é o que sobrevive ao primeiro. Nenhuma extração é perfeita,
+e o número é justamente a parte em que alguém age: 15% ou 20% de multa, 3
+ou 6 anos de impedimento, 30 ou 60 dias de prazo. Conferir que a evidência
+existe sem conferir que ela prova a alegação deixa passar exatamente o
+erro que mais custa.
+
+A comparação aceita as duas grafias: `"prazo máximo de até dez dias úteis"`
+sustenta `"em até 10 dias úteis"`. Edital escreve por extenso o tempo
+todo, e reprovar isso seria trocar alucinação por falso alarme. E o token
+numérico carrega a pontuação, senão o `15` de `11.1.15` — a numeração da
+cláusula — provaria a multa de 15%.
+
+Daí os três estados:
+
+| | significado |
+|---|---|
+| ✓ | a citação está no edital e contém os números da frase |
+| ≈ | a citação é do edital, mas o número afirmado não está nela |
+| ? | não achei essa citação no edital |
+
 ## Consequências
 
 - A conferência usa o texto **completo**, não o recorte enviado ao modelo.
   Reprovar uma citação verdadeira porque o nosso próprio corte a deixou de
   fora seria injusto com o modelo e enganoso com quem lê.
 - A taxa de confirmação vira coluna no banco (`analise_edital.confiabilidade`):
-  dá para ordenar por ela e para perceber que um modelo está piorando.
+  dá para ordenar por ela e para perceber que um modelo está piorando. Ela
+  conta só o que está em ✓ — é a fração que dá para repetir para outra
+  pessoa sem ressalva.
 - Um edital digitalizado sem OCR não produz resumo — produz o aviso de que
   é digitalizado. É o comportamento correto: análise de texto vazio seria
   alucinação pura.

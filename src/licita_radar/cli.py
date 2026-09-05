@@ -433,8 +433,12 @@ def cmd_documentos(
         console.print(
             f"[dim]{s.pncp_integracao_base_url}{coord.rota_arquivos}[/dim]",
         )
-        async with DocumentosPNCP(s) as cliente, _esperando("consultando os anexos no PNCP"):
-            documentos = await cliente.listar(numero)
+        async with DocumentosPNCP(s) as cliente:
+            # `_esperando` é um gerenciador síncrono: não cabe no mesmo
+            # `async with`, e o spinner segue girando durante o await
+            # porque o Rich desenha numa thread própria.
+            with _esperando("consultando os anexos no PNCP"):
+                documentos = await cliente.listar(numero)
 
         if not documentos:
             console.print("[yellow]nenhum arquivo publicado para esta contratação[/yellow]")
@@ -462,14 +466,25 @@ def cmd_documentos(
     _rodar(_executar())
 
 
+#: O símbolo de cada estado e a cor do recado que o acompanha. São três
+#: porque "a citação é do edital mas não fala do número que a frase afirma"
+#: não é nem confirmação nem invenção — e é o caso que apareceu primeiro
+#: em edital real.
+_MARCAS: dict[str, tuple[str, str]] = {
+    "sustentada": ("[green]✓[/green]", "green"),
+    "numero_sem_apoio": ("[yellow]≈[/yellow]", "yellow"),
+    "nao_encontrada": ("[red]?[/red]", "red"),
+}
+
+
 def _mostrar_resumo_gravado(analise: dict[str, Any]) -> None:
     """Imprime o resumo com a evidência ao lado de cada afirmação.
 
-    A marca no início da linha é o ponto: ✓ quer dizer "eu voltei ao edital
-    e achei esta frase lá"; ? quer dizer "o modelo afirmou e eu não
-    confirmei". Sem a distinção, as duas linhas seriam indistinguíveis — e
-    é exatamente essa indistinção que faz um resumo de IA ser perigoso num
-    documento que ninguém vai reler.
+    A marca no início da linha é o ponto: ✓ é "voltei ao edital e achei
+    isto lá, número incluído"; ≈ é "a citação é real, mas o número da frase
+    não está nela"; ? é "não achei onde". Sem a distinção, as três linhas
+    seriam indistinguíveis — e é essa indistinção que faz um resumo de IA
+    ser perigoso num documento que ninguém vai reler.
     """
     afirmacoes: list[dict[str, Any]] = list(analise.get("afirmacoes") or [])
 
@@ -482,21 +497,32 @@ def _mostrar_resumo_gravado(analise: dict[str, Any]) -> None:
             continue
         console.print(f"[bold cyan]{ROTULOS.get(assunto, assunto)}[/bold cyan]")
         for item in itens:
-            confirmada = bool(item.get("confirmada"))
-            marca = "[green]✓[/green]" if confirmada else "[yellow]?[/yellow]"
+            estado = str(item.get("estado") or ("sustentada" if item.get("confirmada") else ""))
+            marca, cor = _MARCAS.get(estado, ("[yellow]?[/yellow]", "yellow"))
             console.print(f"  {marca} {item.get('texto', '')}")
-            console.print(f'    [dim]"{str(item.get("trecho", ""))[:220]}"[/dim]')
-            if not confirmada:
-                console.print(f"    [yellow]{item.get('observacao', '')}[/yellow]")
+            # `highlight=False` porque a citação é texto do edital, não
+            # saída do programa: o realce automático do Rich pinta números
+            # e palavras soltas dentro da frase e faz parecer que ela foi
+            # processada — logo ali onde a promessa é "isto é literal".
+            console.print(
+                f'    "{str(item.get("trecho", ""))[:220]}"', style="dim", highlight=False
+            )
+            if estado != "sustentada":
+                console.print(f"    [{cor}]{item.get('observacao', '')}[/{cor}]")
         console.print()
 
     if afirmacoes:
-        confirmadas = sum(1 for a in afirmacoes if a.get("confirmada"))
+        contagem = Counter(str(a.get("estado") or "") for a in afirmacoes)
         console.print(
-            f"[dim]{confirmadas} de {len(afirmacoes)} afirmações conferidas no edital · "
-            f"{analise.get('modelo') or '—'} · {analise.get('tokens', 0)} tokens · "
+            f"[dim]{contagem.get('sustentada', 0)} de {len(afirmacoes)} afirmações conferidas "
+            f"no edital · {analise.get('modelo') or '—'} · {analise.get('tokens', 0)} tokens · "
             f"{analise.get('caracteres_lidos', 0)} caracteres lidos[/dim]"
         )
+        if contagem.get("numero_sem_apoio"):
+            console.print(
+                f"[yellow]≈ {contagem['numero_sem_apoio']} afirmação(ões) citam o edital mas "
+                "trazem número que a citação não contém — confira no documento[/yellow]"
+            )
     for alerta in analise.get("alertas") or []:
         console.print(f"[yellow]! {alerta}[/yellow]")
 

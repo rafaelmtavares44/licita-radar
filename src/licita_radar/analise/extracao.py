@@ -100,9 +100,34 @@ def _extrair_pdf(caminho: Path) -> Extracao:
 
     try:
         leitor = PdfReader(str(caminho))
-        paginas = [pagina.extract_text() or "" for pagina in leitor.pages]
     except Exception as erro:  # PDF corrompido, protegido por senha, truncado…
         return Extracao(texto="", origem=caminho.name, erro=f"PDF ilegível: {erro}")
+
+    try:
+        # `layout` respeita a posição do texto na página; o modo padrão
+        # concatena os objetos de texto na ordem em que aparecem no arquivo,
+        # que não é a ordem em que a página é lida.
+        #
+        # A diferença não é estética. Num aviso real do IF/AL, a mesma
+        # cláusula saiu assim:
+        #
+        #   padrão: "Multa de % ( por cento) sobre o valor ... conduta do20 vinte"
+        #   layout: "Multa de 20% (vinte por cento) sobre o valor ... conduta do"
+        #
+        # O número existia e foi parar no fim da linha, deixando uma lacuna
+        # no lugar dele. O modelo leu "Multa de __%", precisou de um valor e
+        # escreveu 15% — plausível, redondo e errado. Extração ruim não
+        # produz resumo incompleto: produz resumo inventado.
+        paginas = [pagina.extract_text(extraction_mode="layout") or "" for pagina in leitor.pages]
+    except Exception as erro:
+        # `layout` é mais novo e mais exigente: PDF com fonte estranha ou
+        # sem informação de posição derruba só ele. Meio texto na ordem
+        # errada vale mais que nenhum texto.
+        logger.info("%s: extração por layout falhou (%s), usando o modo padrão", caminho.name, erro)
+        try:
+            paginas = [pagina.extract_text() or "" for pagina in leitor.pages]
+        except Exception as erro2:
+            return Extracao(texto="", origem=caminho.name, erro=f"PDF ilegível: {erro2}")
 
     texto = normalizar_texto("\n\n".join(paginas))
     total = len(paginas) or 1

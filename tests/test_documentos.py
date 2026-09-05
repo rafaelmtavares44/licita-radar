@@ -321,3 +321,11 @@ async def test_listagem_e_download_tem_prazos_diferentes(settings_docs: Settings
     await baixar_edital(NUMERO, settings=ajustado)
 
     assert prazos == [90.0, 300.0]
+
+
+def test_titulo_que_ja_tem_extensao_nao_ganha_outra() -> None:
+    """ "Minuta de Contrato.pdf" não vira "Minuta de Contrato.pdf.pdf"."""
+    doc = Documento(
+        sequencial=1, titulo="Minuta de Contrato.pdf", tipo=None, url=None, extensao=".pdf"
+    )
+    assert doc.nome_local(NUMERO).endswith("Minuta de Contrato.pdf")

@@ -23,7 +23,10 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Literal
+
+from licita_radar.analise import numeros
 
 #: Tamanho do trecho indexado. Três palavras seguidas iguais é o menor
 #: pedaço que ainda diz alguma coisa: com duas, "de acordo" casaria com
@@ -144,6 +147,12 @@ class Fonte:
         return Conferencia(False, 0.0, "o trecho citado não existe no edital")
 
 
+#: Em que pé ficou uma afirmação depois da conferência. São três, e não
+#: dois, porque "a citação é real mas não fala do número que você afirmou"
+#: é diferente tanto de "conferi" quanto de "inventou a citação".
+Estado = Literal["sustentada", "numero_sem_apoio", "nao_encontrada"]
+
+
 @dataclass
 class Afirmacao:
     """Uma frase do resumo e a evidência que a sustenta."""
@@ -151,9 +160,23 @@ class Afirmacao:
     assunto: str
     texto: str
     trecho: str
+    #: A citação foi localizada no edital.
     confirmada: bool = False
     similaridade: float = 0.0
     observacao: str = ""
+    #: Números que a frase afirma e a citação não contém.
+    numeros_sem_apoio: list[str] = field(default_factory=list)
+
+    @property
+    def sustentada(self) -> bool:
+        """A citação existe **e** cobre os números que a frase afirma."""
+        return self.confirmada and not self.numeros_sem_apoio
+
+    @property
+    def estado(self) -> Estado:
+        if not self.confirmada:
+            return "nao_encontrada"
+        return "numero_sem_apoio" if self.numeros_sem_apoio else "sustentada"
 
     def como_dict(self) -> dict[str, object]:
         return {
@@ -161,13 +184,20 @@ class Afirmacao:
             "texto": self.texto,
             "trecho": self.trecho,
             "confirmada": self.confirmada,
+            "sustentada": self.sustentada,
+            "estado": self.estado,
             "similaridade": round(self.similaridade, 3),
             "observacao": self.observacao,
+            "numeros_sem_apoio": list(self.numeros_sem_apoio),
         }
 
 
 def conferir_todas(afirmacoes: list[Afirmacao], texto_fonte: str) -> list[Afirmacao]:
     """Marca cada afirmação com o veredito da conferência.
+
+    São duas perguntas, e a segunda só existe porque a primeira sozinha
+    deixou passar um erro real: *a citação está no edital?* e *a citação
+    fala do número que a frase afirma?*
 
     Nada é removido de propósito. Quem lê o resumo precisa poder distinguir
     "o edital diz isto, e aqui está onde" de "o modelo afirmou isto e eu
@@ -180,10 +210,27 @@ def conferir_todas(afirmacoes: list[Afirmacao], texto_fonte: str) -> list[Afirma
         afirmacao.confirmada = veredito.confirmado
         afirmacao.similaridade = veredito.similaridade
         afirmacao.observacao = veredito.motivo
+
+        if not veredito.confirmado:
+            continue
+
+        afirmacao.numeros_sem_apoio = numeros.nao_sustentados(afirmacao.texto, afirmacao.trecho)
+        if afirmacao.numeros_sem_apoio:
+            faltando = ", ".join(afirmacao.numeros_sem_apoio)
+            afirmacao.observacao = (
+                f"a citação é do edital, mas não contém {faltando} — "
+                "confira esse número no documento antes de usar"
+            )
+
     return afirmacoes
 
 
 def taxa_de_confirmacao(afirmacoes: list[Afirmacao]) -> float:
+    """A fração que se pode repetir para outra pessoa sem ressalva.
+
+    Conta `sustentada`, não `confirmada`: uma afirmação com número que a
+    citação não cobre é justamente a que alguém repetiria errado.
+    """
     if not afirmacoes:
         return 0.0
-    return sum(1 for a in afirmacoes if a.confirmada) / len(afirmacoes)
+    return sum(1 for a in afirmacoes if a.sustentada) / len(afirmacoes)

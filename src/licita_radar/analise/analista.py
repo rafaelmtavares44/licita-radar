@@ -70,7 +70,10 @@ Nunca use o mesmo conteúdo genérico nos dois.
 4. Em "riscos", aponte apenas exigências concretas que costumam eliminar \
 empresas (atestado de acervo, capital mínimo, visita técnica obrigatória, \
 garantia alta), sempre com o trecho.
-5. Números, prazos e percentuais devem vir exatamente como aparecem no edital."""
+5. Números, prazos e percentuais devem vir exatamente como aparecem no edital.
+6. Se você afirmar um número, o "trecho" DEVE conter esse número. Quando o \
+edital não informa o valor (aparece em branco, "___" ou "%" sozinho), diga que \
+não está informado — nunca complete com um valor típico."""
 
 
 def prompt_analise(*, objeto: str, edital: str, faltantes: list[str]) -> str:
