@@ -29,6 +29,7 @@ from typing import Any, Self
 import httpx
 
 from licita_radar.config.settings import Settings, get_settings
+from licita_radar.ingest.normalizar import sem_acento
 
 logger = logging.getLogger(__name__)
 
@@ -175,32 +176,54 @@ def interpretar_lista(dados: Any) -> list[Documento]:
     return documentos
 
 
-def ordenar_por_relevancia(documentos: list[Documento]) -> list[Documento]:
-    """Edital primeiro, anexo de planilha por último.
+#: O peso de cada tipo de documento na hora de escolher o que ler. Menor
+#: vem antes. As marcas são comparadas sem acento, contra título e tipo
+#: juntos — o título costuma ser inútil ("12/2026.pdf") e é o
+#: `tipoDocumentoNome` que diz o que o arquivo é.
+_PRIORIDADES: tuple[tuple[str, int], ...] = (
+    # O documento-mestre. Em pregão chama-se edital; em dispensa, aviso de
+    # contratação direta — e é o mesmo papel: regras de participação,
+    # habilitação e prazos.
+    ("edital", 0),
+    ("aviso de contratacao direta", 0),
+    ("aviso de licitacao", 0),
+    # O que exatamente se compra e o que se exige de quem entrega.
+    ("termo de referencia", 1),
+    ("projeto basico", 1),
+    # Justifica a compra para o controle interno; não muda a decisão de
+    # participar. Vale menos que a minuta, que ao menos traz as sanções.
+    ("estudo tecnico preliminar", 5),
+    (" etp ", 5),
+    ("minuta", 4),
+    ("contrato", 4),
+    # Números de composição de custo. Interessa depois de decidir disputar.
+    ("planilha", 6),
+    ("orcamento", 6),
+)
 
-    Um pregão costuma ter de 3 a 15 anexos, e o orçamento de leitura não
-    dá para todos. A ordem aqui é a ordem em que o dinheiro é gasto, então
-    ela precisa refletir onde a informação que importa costuma estar: o
-    edital e o termo de referência dizem o que se compra e o que se exige;
-    a planilha de composição de custos, não.
+
+def ordenar_por_relevancia(documentos: list[Documento]) -> list[Documento]:
+    """O documento-mestre primeiro, a planilha de custos por último.
+
+    Uma contratação costuma ter de 3 a 15 anexos, e o orçamento de leitura
+    não dá para todos. A ordem aqui é a ordem em que o dinheiro é gasto,
+    então ela precisa refletir onde a informação que decide "vale disputar?"
+    costuma estar.
+
+    O erro que dado real corrigiu: a primeira versão procurava "edital" e
+    mandava qualquer "aviso" para o quarto lugar. Só que **em dispensa não
+    existe edital** — o Aviso de Contratação Direta faz o papel dele. E
+    dispensa é a modalidade mais comum: numa amostra de Goiás, 36 das 37
+    contratações abertas eram dispensa. A regra escrita para o caso raro
+    excluía o documento principal do caso comum.
     """
-    prioridades = (
-        ("edital", 0),
-        ("termo de referencia", 1),
-        ("termo de referência", 1),
-        ("projeto basico", 1),
-        ("projeto básico", 1),
-        ("aviso", 3),
-        ("minuta", 4),
-        ("contrato", 4),
-        ("planilha", 6),
-        ("orcamento", 6),
-        ("orçamento", 6),
-    )
 
     def peso(doc: Documento) -> tuple[int, int]:
-        alvo = f"{doc.titulo} {doc.tipo or ''}".lower()
-        for marca, valor in prioridades:
+        # Pontuação e sublinhado viram espaço para que "ETP_158381" case
+        # com a marca " etp " sem que "etc" ou "vetplan" casem junto.
+        alvo = re.sub(r"[^a-z0-9]+", " ", sem_acento(f"{doc.titulo} {doc.tipo or ''}"))
+        alvo = f" {alvo.strip()} "
+        for marca, valor in _PRIORIDADES:
             if marca in alvo:
                 return (valor, doc.sequencial)
         return (2, doc.sequencial)
@@ -217,9 +240,12 @@ class DocumentosPNCP:
         cliente: httpx.AsyncClient | None = None,
     ) -> None:
         self._s = settings or get_settings()
+        # O timeout curto é o padrão do cliente; só o download pede o longo.
+        # Listar arquivos é um JSON de dez linhas: esperar dois minutos por
+        # ele é ficar olhando um cursor parado sem saber se travou.
         self._cliente = cliente or httpx.AsyncClient(
             base_url=self._s.pncp_integracao_base_url,
-            timeout=self._s.pncp_download_timeout_s,
+            timeout=self._s.pncp_timeout_s,
             follow_redirects=True,
             headers={"User-Agent": "licita-radar/0.1"},
         )
@@ -281,7 +307,12 @@ class DocumentosPNCP:
 
         rota = f"{coord.rota_arquivos}/{documento.sequencial}"
         try:
-            resposta = await self._cliente.get(rota, headers={"Accept": "*/*"})
+            resposta = await self._cliente.get(
+                rota,
+                headers={"Accept": "*/*"},
+                # Aqui sim: anexo de 30 MB com planta e memorial é rotina.
+                timeout=self._s.pncp_download_timeout_s,
+            )
             resposta.raise_for_status()
         except httpx.HTTPError as erro:
             raise ErroDocumentos(f"falha ao baixar {documento.titulo!r}: {erro}") from erro

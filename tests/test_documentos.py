@@ -84,6 +84,72 @@ def test_extensao_vem_do_tipo_quando_o_titulo_nao_tem() -> None:
     assert docs[0].extensao == ".pdf"
 
 
+def test_em_dispensa_o_aviso_faz_o_papel_do_edital() -> None:
+    """Anexos reais da dispensa 10825373000155-1-000157/2026 (IF/AL).
+
+    A primeira versão procurava "edital" e mandava qualquer "aviso" para o
+    quarto lugar. Como só os três primeiros são analisados, o documento que
+    traz as regras de participação ficava de fora — na modalidade que é 36
+    de cada 37 contratações abertas.
+    """
+    docs = interpretar_lista(
+        [
+            {
+                "sequencialDocumento": 1,
+                "titulo": "Minuta de Contrato.pdf",
+                "tipoDocumentoNome": "Minuta do Contrato",
+            },
+            {
+                "sequencialDocumento": 2,
+                "titulo": "11/2026.pdf",
+                "tipoDocumentoNome": "Estudo Técnico Preliminar",
+            },
+            {
+                "sequencialDocumento": 3,
+                "titulo": "06. ETP_158381-000011-2026.pdf",
+                "tipoDocumentoNome": "Outros Documentos",
+            },
+            {
+                "sequencialDocumento": 4,
+                "titulo": "12/2026.pdf",
+                "tipoDocumentoNome": "Termo de Referência",
+            },
+            {
+                "sequencialDocumento": 5,
+                "titulo": "1/2026.pdf",
+                "tipoDocumentoNome": "Aviso de Contratação Direta",
+            },
+        ]
+    )
+    ordenados = ordenar_por_relevancia(docs)
+
+    # o aviso é o documento-mestre da dispensa, e o TR diz o que se compra
+    assert [d.sequencial for d in ordenados[:2]] == [5, 4]
+    # o ETP justifica a compra para o controle interno; não decide disputa
+    assert [d.sequencial for d in ordenados[-2:]] == [2, 3]
+
+
+def test_titulo_inutil_nao_atrapalha_porque_o_tipo_decide() -> None:
+    """ "12/2026.pdf" não diz nada; `tipoDocumentoNome` diz tudo."""
+    docs = interpretar_lista(
+        [
+            {"sequencialDocumento": 1, "titulo": "9/2026.pdf"},
+            {
+                "sequencialDocumento": 2,
+                "titulo": "8/2026.pdf",
+                "tipoDocumentoNome": "Aviso de Contratação Direta",
+            },
+        ]
+    )
+    assert ordenar_por_relevancia(docs)[0].sequencial == 2
+
+
+def test_etp_nao_casa_com_palavra_que_so_contem_as_letras() -> None:
+    docs = interpretar_lista([{"sequencialDocumento": 1, "titulo": "Vetplan etc detalhado.pdf"}])
+    # cairia em 5 se "etp" casasse solto; fica no peso padrão
+    assert ordenar_por_relevancia(docs)[0].sequencial == 1
+
+
 def test_edital_vem_antes_da_planilha() -> None:
     docs = interpretar_lista(
         [
