@@ -6,6 +6,8 @@ import asyncio
 import logging
 import sys
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Any
@@ -69,13 +71,31 @@ def _configurar_log() -> None:
     logging.getLogger("psycopg.pool").setLevel(logging.ERROR)
 
 
+#: Falhas que já sabem se explicar. Toda exceção aqui carrega uma mensagem
+#: escrita para uma pessoa ler — mostrar o stack trace dela seria enterrar
+#: a explicação sob duzentas linhas de biblioteca.
+_ERROS_COM_RECADO = (ErroDeBanco, ErroDocumentos)
+
+
 def _rodar(corrotina: Any) -> Any:
-    """Executa e traduz falha de banco em recado, não em stack trace."""
+    """Executa e traduz falha conhecida em recado, não em stack trace."""
     try:
         return asyncio.run(corrotina)
-    except ErroDeBanco as erro:
+    except _ERROS_COM_RECADO as erro:
         console.print(f"[bold red]{erro}[/bold red]")
         raise typer.Exit(code=1) from erro
+
+
+@contextmanager
+def _esperando(mensagem: str) -> Iterator[None]:
+    """Um giro na tela enquanto o PNCP pensa.
+
+    A rota de anexos leva quase um minuto para responder, e um cursor
+    parado por um minuto é indistinguível de um programa travado — a ponto
+    de dar vontade de "consertar" o timeout que estava certo.
+    """
+    with console.status(f"[dim]{mensagem}… (pode levar até um minuto)[/dim]"):
+        yield
 
 
 def _carregar_ou_sair(caminho: Path) -> Perfil:
@@ -413,7 +433,7 @@ def cmd_documentos(
         console.print(
             f"[dim]{s.pncp_integracao_base_url}{coord.rota_arquivos}[/dim]",
         )
-        async with DocumentosPNCP(s) as cliente:
+        async with DocumentosPNCP(s) as cliente, _esperando("consultando os anexos no PNCP"):
             documentos = await cliente.listar(numero)
 
         if not documentos:
@@ -439,11 +459,7 @@ def cmd_documentos(
             for b in baixados:
                 console.print(f"  [green]✓[/green] {b.caminho} ({b.bytes_gravados // 1024} KB)")
 
-    try:
-        _rodar(_executar())
-    except ErroDocumentos as erro:
-        console.print(f"[bold red]{erro}[/bold red]")
-        raise typer.Exit(code=1) from erro
+    _rodar(_executar())
 
 
 def _mostrar_resumo_gravado(analise: dict[str, Any]) -> None:
@@ -495,8 +511,8 @@ def cmd_analisar(
     s = get_settings()
 
     async def _executar() -> None:
-        console.print("[dim]baixando os anexos…[/dim]")
-        baixados = await baixar_edital(numero, maximo=s.analise_max_documentos, settings=s)
+        with _esperando("consultando e baixando os anexos no PNCP"):
+            baixados = await baixar_edital(numero, maximo=s.analise_max_documentos, settings=s)
         if not baixados:
             console.print("[yellow]esta contratação não tem anexos legíveis[/yellow]")
             return

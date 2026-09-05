@@ -264,9 +264,29 @@ class DocumentosPNCP:
             await self._cliente.aclose()
 
     async def listar(self, numero_controle: str) -> list[Documento]:
+        """Os arquivos publicados, na ordem em que vale a pena lê-los.
+
+        Esta rota é lenta: uma medição real levou **58 segundos** para
+        devolver um JSON de dez linhas. Não é a rede — é o PNCP. Por isso
+        ela tem timeout próprio, generoso, e por isso quem chama avisa que
+        vai demorar: a primeira versão calou por 58 segundos e a segunda,
+        "corrigida" para 30, passou a cortar uma resposta que estava a
+        caminho. Endpoint lento não é endpoint travado.
+        """
         coord = decompor(numero_controle)
         try:
-            resposta = await self._cliente.get(coord.rota_arquivos, headers={"Accept": "*/*"})
+            resposta = await self._cliente.get(
+                coord.rota_arquivos,
+                headers={"Accept": "*/*"},
+                timeout=self._s.pncp_arquivos_timeout_s,
+            )
+        except httpx.TimeoutException as erro:
+            raise ErroDocumentos(
+                f"o PNCP não respondeu em {self._s.pncp_arquivos_timeout_s:.0f}s ao listar os "
+                f"anexos de {numero_controle}.\n"
+                "Essa rota é lenta mesmo (já medimos quase um minuto). Tente de novo, "
+                "ou aumente LR_PNCP_ARQUIVOS_TIMEOUT_S no .env."
+            ) from erro
         except httpx.HTTPError as erro:
             raise ErroDocumentos(f"falha ao listar arquivos de {numero_controle}: {erro}") from erro
 

@@ -279,3 +279,45 @@ async def test_arquivo_grande_demais_e_recusado(settings_docs: Settings) -> None
     respx.get(f"{ROTA}/1").mock(return_value=httpx.Response(200, content=b"x" * (2 * 1024 * 1024)))
 
     assert await baixar_edital(NUMERO, settings=pequeno) == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_timeout_vira_recado_e_nao_stack_trace(settings_docs: Settings) -> None:
+    """A rota de anexos leva quase um minuto; quando estoura, isso importa.
+
+    Um `ReadTimeout` cru sobe 200 linhas de httpx e httpcore. Quem lê
+    precisa de duas coisas: que a rota é lenta mesmo, e qual variável
+    aumentar.
+    """
+    respx.get(ROTA).mock(side_effect=httpx.ReadTimeout("tempo esgotado"))
+
+    async with DocumentosPNCP(settings_docs) as cliente:
+        with pytest.raises(ErroDocumentos) as capturado:
+            await cliente.listar(NUMERO)
+
+    recado = str(capturado.value)
+    assert "LR_PNCP_ARQUIVOS_TIMEOUT_S" in recado
+    assert "lenta" in recado
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_listagem_e_download_tem_prazos_diferentes(settings_docs: Settings) -> None:
+    """O JSON lento e o PDF de 30 MB não podem compartilhar um número só."""
+    prazos: list[float | None] = []
+
+    def registrar(requisicao: httpx.Request) -> httpx.Response:
+        prazos.append(requisicao.extensions.get("timeout", {}).get("read"))
+        if requisicao.url.path.endswith("/1"):
+            return httpx.Response(200, content=b"conteudo")
+        return httpx.Response(200, json=[{"sequencialDocumento": 1, "titulo": "Edital.pdf"}])
+
+    respx.get(url__startswith=ROTA).mock(side_effect=registrar)
+    ajustado = settings_docs.model_copy(
+        update={"pncp_arquivos_timeout_s": 90.0, "pncp_download_timeout_s": 300.0}
+    )
+
+    await baixar_edital(NUMERO, settings=ajustado)
+
+    assert prazos == [90.0, 300.0]

@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     #: memorial descritivo é rotina, e 30 s de timeout reprova quase todos.
     pncp_download_timeout_s: float = Field(default=120.0, ge=10.0, le=600.0)
 
+    #: Listar anexos devolve dez linhas de JSON e mesmo assim é lento: uma
+    #: medição real levou 58 s. O timeout curto do resto do PNCP corta essa
+    #: rota no meio — ela precisa do seu próprio, e de um aviso na tela.
+    pncp_arquivos_timeout_s: float = Field(default=120.0, ge=10.0, le=600.0)
+
     #: Onde os PDFs ficam. Fora do controle de versão, e reaproveitados
     #: entre execuções: edital publicado não muda.
     documentos_dir: Path = Path(".editais")
