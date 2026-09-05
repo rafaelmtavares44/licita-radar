@@ -8,12 +8,17 @@ vetada por "toner" nunca vira embedding, e muito menos custa um token.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from langgraph.types import interrupt
 
+from licita_radar.analise.analista import analisar_edital
+from licita_radar.analise.extracao import ler_documentos
 from licita_radar.config.perfil import Perfil
+from licita_radar.config.settings import Settings, get_settings
 from licita_radar.graph.state import EditalState
+from licita_radar.ingest.documentos import baixar_edital
 from licita_radar.llm import (
     LLM,
     SISTEMA_JUSTIFICATIVA,
@@ -39,6 +44,7 @@ class Dependencias:
     perfil: Perfil
     motor: MotorSemantico
     llm: LLM
+    settings: Settings = field(default_factory=get_settings)
 
 
 # --------------------------------------------------------------- camada 1
@@ -159,7 +165,7 @@ async def justificar(estado: EditalState, deps: Dependencias) -> EditalState:
     )
 
 
-# ------------------------------------------------------------ humano e fim
+# ------------------------------------------------------------------ humano
 
 
 def revisar(estado: EditalState) -> EditalState:
@@ -197,6 +203,85 @@ def revisar(estado: EditalState) -> EditalState:
         situacao="aprovada" if aprovou else "rejeitada",
         trilha=[f"revisar:{'aprovada' if aprovou else 'rejeitada'}"],
     )
+
+
+# --------------------------------------------------------------- camada 4
+
+
+async def analisar(estado: EditalState, deps: Dependencias) -> EditalState:
+    """Baixa o edital, lê e resume — só para o que a pessoa aprovou.
+
+    Este é o nó mais caro do grafo, e por isso é o último. Ele fica depois
+    do `revisar` de propósito: analisar um edital de 80 páginas de uma
+    licitação que a pessoa vai descartar em dois segundos é gastar dinheiro
+    para produzir nada. O funil que começou em palavra-chave termina aqui,
+    e cada camada só deixa passar o que a próxima merece receber.
+
+    Falhar aqui não pode custar o alerta. Se o PNCP estiver fora do ar, se
+    o edital for um escaneado sem OCR ou se o modelo devolver bobagem, a
+    licitação continua aprovada e notificada — apenas sem o resumo.
+    """
+    numero = estado.get("numero_controle", "")
+
+    try:
+        baixados = await baixar_edital(
+            numero,
+            maximo=deps.settings.analise_max_documentos,
+            settings=deps.settings,
+        )
+    except Exception as erro:
+        logger.warning("não foi possível baixar o edital de %s: %s", numero, erro)
+        return EditalState(
+            analise={"alertas": [f"não foi possível baixar o edital: {erro}"]},
+            trilha=["analisar:sem_download"],
+        )
+
+    if not baixados:
+        return EditalState(
+            documentos=[],
+            analise={"alertas": ["esta contratação não tem anexos legíveis publicados"]},
+            trilha=["analisar:sem_anexo"],
+        )
+
+    leitura = ler_documentos([Path(b.caminho) for b in baixados])
+    documentos = [b.como_dict() for b in baixados]
+
+    if leitura.escaneado or not leitura.texto:
+        return EditalState(
+            documentos=documentos,
+            analise={"alertas": [leitura.diagnostico]},
+            trilha=["analisar:sem_texto"],
+        )
+
+    analise = await analisar_edital(
+        llm=deps.llm,
+        objeto=limpar_objeto(estado.get("objeto", "")),
+        texto_edital=leitura.texto,
+        orcamento_caracteres=deps.settings.analise_orcamento_caracteres,
+    )
+
+    logger.info(
+        "%s: %d afirmações, %.0f%% confirmadas, %d tokens",
+        numero,
+        len(analise.afirmacoes),
+        analise.confiabilidade * 100,
+        analise.tokens,
+    )
+
+    # O texto do edital NÃO entra no estado. O LangGraph grava um
+    # checkpoint a cada transição de nó: 400 KB de edital viram alguns
+    # megabytes no banco por contratação, e nada nos nós seguintes precisa
+    # do texto — as citações já vêm dentro da análise, e o arquivo continua
+    # em disco para quem quiser conferir.
+    return EditalState(
+        documentos=documentos,
+        analise=analise.como_dict(),
+        tokens_gastos=estado.get("tokens_gastos", 0) + analise.tokens,
+        trilha=["analisar"],
+    )
+
+
+# ------------------------------------------------------------------- fim
 
 
 def notificar(estado: EditalState) -> EditalState:

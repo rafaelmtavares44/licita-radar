@@ -1,9 +1,9 @@
 # licita-radar
 
-**Um radar de licitações públicas.** Ele lê o [PNCP](https://pncp.gov.br) todo dia, entende o que a sua empresa vende e avisa só quando aparece algo que vale a pena disputar.
+**Um radar de licitações públicas que também lê o edital.** Ele varre o [PNCP](https://pncp.gov.br) todo dia, entende o que a sua empresa vende, avisa só quando aparece algo que vale a pena disputar — e, do que você aprovar, baixa o edital e devolve um resumo executivo **com o trecho do documento ao lado de cada afirmação**.
 
 > [!WARNING]
-> Em construção. A v0.1 ainda não está publicada — hoje o projeto coleta do PNCP (M1) e pontua contra o seu perfil (M2). O roadmap abaixo diz o que falta.
+> Em construção. A v0.1 ainda não está publicada. Hoje o projeto coleta do PNCP (M1), pontua contra o seu perfil (M2), roda o grafo com revisão humana (M3) e analisa o edital (M4). O roadmap abaixo diz o que falta.
 
 ---
 
@@ -16,11 +16,27 @@ Centenas de órgãos públicos publicam contratações no PNCP todos os dias. Um
 Você descreve o que a sua empresa vende **uma vez**, num arquivo YAML. O licita-radar faz o resto:
 
 ```
-PNCP ──► filtro léxico ──► similaridade semântica ──► LLM ──► você aprova ──► alerta
-         (custo zero)      (custo marginal)          (só o topo)
+PNCP ─► filtro léxico ─► similaridade ─► LLM ─► você aprova ─► lê o edital ─► alerta
+        (custo zero)     (marginal)      (o topo)              (só o aprovado)
 ```
 
-A ordem importa: as camadas caras vêm **depois** de duas camadas baratas. Se cada contratação passasse por um modelo de linguagem, o projeto seria lento e caro. Do jeito que está, o LLM vê menos de 1% do que entra.
+A ordem importa: as camadas caras vêm **depois** das baratas. Se cada contratação passasse por um modelo de linguagem, o projeto seria lento e caro. Do jeito que está, o LLM vê menos de 1% do que entra — e o edital em PDF, menos ainda: só é baixado e lido depois que uma pessoa disse que aquela licitação interessa.
+
+### O analista de editais
+
+A dor de quem disputa licitação não é descobrir que o edital existe: é entender o edital. Oitenta páginas de juridiquês decidem se vale participar, e ler isso exige um profissional caro e escasso.
+
+O `licita-radar analisar` baixa os anexos, extrai o texto e devolve o que importa — objeto real, exigências de habilitação, garantia, prazos, pagamento, multas e riscos. **Cada afirmação vem com o trecho literal do edital que a sustenta, e cada trecho é procurado de volta no documento original antes de aparecer na tela:**
+
+```
+✓ Pede atestado de capacidade técnica compatível com o objeto.
+  "apresentar atestado de capacidade técnica, fornecido por pessoa jurídica"
+? Exige certificação ISO 27001 válida.
+  "a licitante deverá comprovar certificação ISO 27001 vigente"
+  o trecho citado não existe no edital
+```
+
+O `?` é o ponto. Um resumo que inventa uma exigência faz a empresa desistir de uma licitação que venceria — e quem pediu o resumo é justamente quem não vai reler as oitenta páginas para perceber. A conferência é determinística, não custa uma chamada a mais de modelo, e está descrita em [`docs/decisoes/0007`](docs/decisoes/0007-toda-afirmacao-carrega-o-trecho-que-a-prova.md).
 
 ---
 
@@ -85,6 +101,10 @@ problema com a instrução do conserto.
 | `licita-radar ingest` | Busca contratações no PNCP e grava. `--seco` mostra sem gravar |
 | `licita-radar listar` | Mostra o que está guardado, com proposta ainda aberta |
 | `licita-radar match` | Pontua tudo contra o seu perfil e mostra o funil |
+| `licita-radar radar` | Passa as contratações pelo grafo, até a revisão humana |
+| `licita-radar revisar` | Mostra o que espera decisão; ao aprovar, já lê o edital |
+| `licita-radar documentos` | Lista (e baixa, com `--baixar`) os anexos de uma contratação |
+| `licita-radar analisar` | Resume o edital com o trecho de origem em cada afirmação |
 | `licita-radar doctor` | Diagnostica o ambiente quando algo não funciona |
 
 ### Onde procurar
@@ -186,11 +206,12 @@ A [API de consultas](https://pncp.gov.br/api/consulta/swagger-ui/index.html) é 
 | M0 | Fundação: repositório, CI, banco | ✅ |
 | M1 | Ingestão do PNCP | ✅ |
 | M2 | Funil de matching (léxico + semântico) | ✅ |
-| M3 | Grafo LangGraph com checkpoint | ⬜ |
-| M4 | Aprovação humana e alerta no Telegram | ⬜ |
-| M5 | Acabamento e release `v0.1.0` | ⬜ |
+| M3 | Grafo LangGraph com checkpoint e revisão humana | ✅ |
+| M4 | Analista de editais: download, extração e resumo com citação | ✅ |
+| M5 | Painel web | ⬜ |
+| M6 | Alerta no Telegram e release `v0.1.0` | ⬜ |
 
-Fora do escopo da v0.1, de propósito: leitura do edital em PDF, múltiplos perfis, painel web e API HTTP. Estão em [`docs/roadmap.md`](docs/roadmap.md) esperando a vez.
+O alerta desceu na fila de propósito: sem o resumo do edital, ele avisaria a mesma coisa que os portais de licitação já avisam. Fora do escopo, ainda: múltiplos perfis, API HTTP e OCR de edital digitalizado — estão em [`docs/roadmap.md`](docs/roadmap.md) esperando a vez.
 
 ---
 

@@ -22,6 +22,9 @@ perfil.yaml
 # cache de desenvolvimento das respostas do PNCP
 .cache_pncp/
 
+# editais baixados: são públicos, mas pesam e se recuperam sozinhos
+.editais/
+
 # editores
 .vscode/
 .idea/

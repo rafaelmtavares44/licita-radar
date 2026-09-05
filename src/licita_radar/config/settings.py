@@ -45,6 +45,28 @@ class Settings(BaseSettings):
     pncp_cache_local: bool = False
     pncp_cache_dir: Path = Path(".cache_pncp")
 
+    # --- documentos do edital ---
+    # Outra API, outra base: `/api/consulta` devolve metadados da
+    # contratação; os arquivos do edital só existem em `/api/pncp`.
+    pncp_integracao_base_url: str = "https://pncp.gov.br/api/pncp"
+
+    #: Baixar um edital não é baixar um JSON. Anexo de 30 MB com planta e
+    #: memorial descritivo é rotina, e 30 s de timeout reprova quase todos.
+    pncp_download_timeout_s: float = Field(default=120.0, ge=10.0, le=600.0)
+
+    #: Onde os PDFs ficam. Fora do controle de versão, e reaproveitados
+    #: entre execuções: edital publicado não muda.
+    documentos_dir: Path = Path(".editais")
+    documento_tamanho_max_mb: int = Field(default=40, ge=1, le=500)
+
+    #: Quantos anexos entram na análise, em ordem de relevância. Três cobre
+    #: edital + termo de referência + um anexo na esmagadora maioria.
+    analise_max_documentos: int = Field(default=3, ge=1, le=20)
+
+    #: Quanto texto de edital vai para o modelo por análise. Acima disso o
+    #: recorte por assunto entra e escolhe o que enviar.
+    analise_orcamento_caracteres: int = Field(default=24_000, ge=2_000, le=200_000)
+
     # --- LLM (opcional) ---
     # Protocolo da OpenAI: serve OpenAI, Groq, Ollama, OpenRouter, LM Studio.
     # Sem base_url e modelo, o projeto usa a justificativa heurística e roda

@@ -38,6 +38,11 @@ grafo = [
     "langgraph>=1.0",
     "langgraph-checkpoint-postgres>=3.0",
 ]
+# Leitura de edital. Fica separado porque `ingest`, `match` e `radar` não
+# precisam abrir PDF nenhum — só o `analisar` precisa.
+documentos = [
+    "pypdf>=5.0",
+]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
@@ -50,6 +55,7 @@ dev = [
     "fastembed>=0.4",
     "langgraph>=1.0",
     "langgraph-checkpoint-postgres>=3.0",
+    "pypdf>=5.0",
 ]
 
 [project.scripts]

@@ -16,6 +16,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from licita_radar.config.perfil import Perfil
+from licita_radar.config.settings import Settings
 from licita_radar.graph import Dependencias, compilar, configuracao, estado_inicial
 from licita_radar.llm import (
     LLMCompativelOpenAI,
@@ -51,17 +52,18 @@ class LLMFalso:
         return Resposta(texto=self._texto, modelo=self.modelo, tokens=42)
 
 
-def _deps(perfil: Perfil, llm: Any = None) -> Dependencias:
+def _deps(perfil: Perfil, llm: Any = None, settings: Settings | None = None) -> Dependencias:
     return Dependencias(
         perfil=perfil,
         motor=MotorSemantico(EncoderFalso()),
         llm=llm or LLMDesligado(),
+        settings=settings or Settings(database_url="postgresql://ninguem@localhost:1/inexistente"),
     )
 
 
-def _entrada(objeto: str, perfil: Perfil) -> Any:
+def _entrada(objeto: str, perfil: Perfil, numero: str = "X-1-1/2026") -> Any:
     return estado_inicial(
-        numero_controle="X-1-1/2026",
+        numero_controle=numero,
         objeto=objeto,
         perfil_id=perfil.id,
         orgao="MINISTÉRIO DA GESTÃO",
@@ -123,7 +125,7 @@ class TestPausaHumana:
 
         assert final["situacao"] == "notificada"
         assert final["decisao_humana"] == "aprovada"
-        assert final["trilha"][-2:] == ["revisar:aprovada", "notificar"]
+        assert final["trilha"][-3:] == ["revisar:aprovada", "analisar:sem_download", "notificar"]
 
     async def test_rejeitar_arquiva_com_o_comentario(self, perfil: Perfil) -> None:
         app = compilar(_deps(perfil), checkpointer=InMemorySaver())
@@ -215,9 +217,10 @@ class TestExtrairFrase:
         assert extrair_frase(bruto) == esperado
 
 
-class TestEstadoPreveAnaliseDeEdital:
-    async def test_campos_da_analise_existem_e_comecam_vazios(self, perfil: Perfil) -> None:
-        """Reservados no M3 para o M4 não invalidar os checkpoints gravados."""
+class TestAnaliseDoEdital:
+    """O nó mais caro do funil, e o único que roda depois de uma pessoa."""
+
+    async def test_descartada_nunca_chega_a_baixar_edital(self, perfil: Perfil) -> None:
         app = compilar(_deps(perfil), checkpointer=InMemorySaver())
         config = configuracao("X-4-1/2026")
 
@@ -225,8 +228,145 @@ class TestEstadoPreveAnaliseDeEdital:
         estado = (await app.aget_state(config)).values
 
         assert estado["documentos"] == []
-        assert estado["texto_edital"] is None
         assert estado["analise"] is None
+        assert "analisar" not in " ".join(estado["trilha"])
+
+    async def test_rejeitada_tambem_nao_paga_pela_analise(self, perfil: Perfil) -> None:
+        """Analisar o que a pessoa acabou de descartar é gastar para não usar."""
+        app = compilar(_deps(perfil), checkpointer=InMemorySaver())
+        config = configuracao("X-4-2/2026")
+        await app.ainvoke(
+            _entrada("Desenvolvimento de software e sustentação de sistemas", perfil), config=config
+        )
+
+        final = await app.ainvoke(Command(resume={"decisao": "rejeitar"}), config=config)
+
+        assert final.get("analise") is None
+        assert final["trilha"][-1] == "arquivar"
+
+    @respx.mock
+    async def test_aprovada_baixa_le_e_resume_com_evidencia(
+        self, perfil: Perfil, tmp_path: Any
+    ) -> None:
+        numero = "10825373000155-1-000157/2026"
+        rota = (
+            "https://pncp.exemplo.test/api/pncp/v1/orgaos/10825373000155/compras/2026/157/arquivos"
+        )
+        edital = (
+            "7. DA HABILITAÇÃO\n7.1. A licitante deverá apresentar atestado de "
+            "capacidade técnica emitido por pessoa jurídica."
+        )
+        respx.get(rota).mock(
+            return_value=httpx.Response(
+                200, json=[{"sequencialDocumento": 1, "titulo": "Edital.txt"}]
+            )
+        )
+        respx.get(f"{rota}/1").mock(
+            return_value=httpx.Response(200, content=edital.encode("utf-8"))
+        )
+
+        resposta = json.dumps(
+            {
+                "resumo": "Serviço de TI compatível com a empresa.",
+                "afirmacoes": [
+                    {
+                        "assunto": "habilitacao",
+                        "texto": "Pede atestado de capacidade técnica.",
+                        "trecho": "apresentar atestado de capacidade técnica emitido por",
+                    },
+                    {
+                        "assunto": "garantia",
+                        "texto": "Exige garantia de 30%.",
+                        "trecho": "garantia de execução no percentual de 30% do contrato",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        )
+        llm = LLMFalso(resposta)
+        settings = Settings(
+            pncp_integracao_base_url="https://pncp.exemplo.test/api/pncp",
+            documentos_dir=tmp_path / "editais",
+            database_url="postgresql://ninguem@localhost:1/inexistente",
+        )
+
+        app = compilar(_deps(perfil, llm, settings), checkpointer=InMemorySaver())
+        config = configuracao(numero)
+        await app.ainvoke(
+            _entrada("Desenvolvimento de software e sustentação de sistemas", perfil, numero),
+            config=config,
+        )
+        final = await app.ainvoke(Command(resume={"decisao": "aprovar"}), config=config)
+
+        analise = final["analise"]
+        assert analise["confiabilidade"] == 0.5
+        assert final["documentos"][0]["titulo"] == "Edital.txt"
+        assert final["situacao"] == "notificada"
+        assert final["trilha"][-2:] == ["analisar", "notificar"]
+
+    @respx.mock
+    async def test_texto_do_edital_nao_vai_para_o_checkpoint(
+        self, perfil: Perfil, tmp_path: Any
+    ) -> None:
+        """400 KB por transição de nó viram megabytes por contratação."""
+        numero = "10825373000155-1-000158/2026"
+        rota = (
+            "https://pncp.exemplo.test/api/pncp/v1/orgaos/10825373000155/compras/2026/158/arquivos"
+        )
+        respx.get(rota).mock(
+            return_value=httpx.Response(
+                200, json=[{"sequencialDocumento": 1, "titulo": "Edital.txt"}]
+            )
+        )
+        respx.get(f"{rota}/1").mock(
+            return_value=httpx.Response(200, content=("cláusula. " * 5000).encode("utf-8"))
+        )
+
+        settings = Settings(
+            pncp_integracao_base_url="https://pncp.exemplo.test/api/pncp",
+            documentos_dir=tmp_path / "editais",
+            database_url="postgresql://ninguem@localhost:1/inexistente",
+        )
+        app = compilar(
+            _deps(perfil, LLMFalso('{"resumo": "ok", "afirmacoes": []}'), settings),
+            checkpointer=InMemorySaver(),
+        )
+        config = configuracao(numero)
+        await app.ainvoke(
+            _entrada("Desenvolvimento de software e sustentação de sistemas", perfil, numero),
+            config=config,
+        )
+        final = await app.ainvoke(Command(resume={"decisao": "aprovar"}), config=config)
+
+        assert final["texto_edital"] is None
+        assert final["analise"]["caracteres_lidos"] > 10_000  # foi lido, só não guardado
+
+    @respx.mock
+    async def test_pncp_fora_do_ar_nao_cancela_o_alerta(
+        self, perfil: Perfil, tmp_path: Any
+    ) -> None:
+        """A licitação continua aprovada e notificada — só fica sem resumo."""
+        numero = "10825373000155-1-000159/2026"
+        rota = (
+            "https://pncp.exemplo.test/api/pncp/v1/orgaos/10825373000155/compras/2026/159/arquivos"
+        )
+        respx.get(rota).mock(return_value=httpx.Response(503))
+
+        settings = Settings(
+            pncp_integracao_base_url="https://pncp.exemplo.test/api/pncp",
+            documentos_dir=tmp_path / "editais",
+            database_url="postgresql://ninguem@localhost:1/inexistente",
+        )
+        app = compilar(_deps(perfil, LLMFalso(), settings), checkpointer=InMemorySaver())
+        config = configuracao(numero)
+        await app.ainvoke(
+            _entrada("Desenvolvimento de software e sustentação de sistemas", perfil, numero),
+            config=config,
+        )
+        final = await app.ainvoke(Command(resume={"decisao": "aprovar"}), config=config)
+
+        assert final["situacao"] == "notificada"
+        assert final["analise"]["alertas"]
 
 
 class TestListarModelos:

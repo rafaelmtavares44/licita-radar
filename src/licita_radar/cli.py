@@ -14,19 +14,29 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from licita_radar.analise.analista import ASSUNTOS, ROTULOS, analisar_edital
+from licita_radar.analise.extracao import ler_documentos
 from licita_radar.config.perfil import ErroDePerfil, Perfil, carregar_perfil
 from licita_radar.config.settings import get_settings
 from licita_radar.diagnostico import Estado
 from licita_radar.diagnostico import executar as executar_diagnostico
 from licita_radar.graph.build import configuracao
 from licita_radar.graph.runner import abrir_radar, pendentes, processar, responder
+from licita_radar.ingest.documentos import (
+    DocumentosPNCP,
+    ErroDocumentos,
+    baixar_edital,
+    decompor,
+)
 from licita_radar.ingest.modalidades import rotular
 from licita_radar.ingest.pncp_client import coletar
+from licita_radar.llm import construir_llm
 from licita_radar.matching.calibragem import sugerir_limiar
 from licita_radar.matching.encoder import FastEmbedEncoder, similaridade_cosseno
 from licita_radar.matching.limpeza import limpar_objeto
 from licita_radar.matching.pontuacao import Avaliacao, Veredito, avaliar, explicar
 from licita_radar.matching.semantico import MotorSemantico
+from licita_radar.storage.analise_repo import AnaliseRepo
 from licita_radar.storage.db import Banco, ErroDeBanco, migrar
 from licita_radar.storage.matching_repo import AvaliacaoRepo, EmbeddingRepo, MatchingRepo
 from licita_radar.storage.repositories import ContratacaoRepo, ExecucaoRepo
@@ -368,9 +378,166 @@ def cmd_revisar(
 
                 aprovar = escolha.lower().startswith("a")
                 comentario = typer.prompt("  comentário (enter para pular)", default="") or None
+                if aprovar:
+                    console.print("  [dim]aprovada — baixando e lendo o edital…[/dim]")
                 final = await responder(grafo, numero, aprovar=aprovar, comentario=comentario)
                 cor = "green" if aprovar else "yellow"
                 console.print(f"  [{cor}]{final.get('situacao')}[/{cor}]")
+
+                # A análise do edital só acontece depois do "aprovar": é o
+                # passo mais caro do funil, e agora existe alguém que a quis.
+                analise = final.get("analise")
+                if analise:
+                    _mostrar_resumo_gravado(analise)
+                    async with Banco() as banco_analise:
+                        await AnaliseRepo(banco_analise).salvar(
+                            numero,
+                            analise=analise,
+                            documentos=final.get("documentos", []),
+                        )
+
+    _rodar(_executar())
+
+
+@app.command("documentos")
+def cmd_documentos(
+    numero: Annotated[str, typer.Argument(help="numeroControlePNCP da contratação")],
+    baixar: Annotated[bool, typer.Option("--baixar", help="Traz os arquivos para o disco")] = False,
+) -> None:
+    """Lista (e opcionalmente baixa) os anexos publicados de uma contratação."""
+    _configurar_log()
+    s = get_settings()
+
+    async def _executar() -> None:
+        coord = decompor(numero)
+        console.print(
+            f"[dim]{s.pncp_integracao_base_url}{coord.rota_arquivos}[/dim]",
+        )
+        async with DocumentosPNCP(s) as cliente:
+            documentos = await cliente.listar(numero)
+
+        if not documentos:
+            console.print("[yellow]nenhum arquivo publicado para esta contratação[/yellow]")
+            return
+
+        tabela = Table(header_style="bold", title="Anexos", title_justify="left")
+        tabela.add_column("#", justify="right")
+        tabela.add_column("título")
+        tabela.add_column("tipo")
+        tabela.add_column("legível", justify="center")
+        for doc in documentos:
+            tabela.add_row(
+                str(doc.sequencial),
+                doc.titulo[:70],
+                doc.tipo or "—",
+                "[green]sim[/green]" if doc.legivel else "[dim]não[/dim]",
+            )
+        console.print(tabela)
+
+        if baixar:
+            baixados = await baixar_edital(numero, maximo=s.analise_max_documentos, settings=s)
+            for b in baixados:
+                console.print(f"  [green]✓[/green] {b.caminho} ({b.bytes_gravados // 1024} KB)")
+
+    try:
+        _rodar(_executar())
+    except ErroDocumentos as erro:
+        console.print(f"[bold red]{erro}[/bold red]")
+        raise typer.Exit(code=1) from erro
+
+
+def _mostrar_resumo_gravado(analise: dict[str, Any]) -> None:
+    """Imprime o resumo com a evidência ao lado de cada afirmação.
+
+    A marca no início da linha é o ponto: ✓ quer dizer "eu voltei ao edital
+    e achei esta frase lá"; ? quer dizer "o modelo afirmou e eu não
+    confirmei". Sem a distinção, as duas linhas seriam indistinguíveis — e
+    é exatamente essa indistinção que faz um resumo de IA ser perigoso num
+    documento que ninguém vai reler.
+    """
+    afirmacoes: list[dict[str, Any]] = list(analise.get("afirmacoes") or [])
+
+    if analise.get("resumo"):
+        console.print(f"\n[bold]{analise['resumo']}[/bold]\n")
+
+    for assunto in ASSUNTOS:
+        itens = [a for a in afirmacoes if a.get("assunto") == assunto]
+        if not itens:
+            continue
+        console.print(f"[bold cyan]{ROTULOS.get(assunto, assunto)}[/bold cyan]")
+        for item in itens:
+            confirmada = bool(item.get("confirmada"))
+            marca = "[green]✓[/green]" if confirmada else "[yellow]?[/yellow]"
+            console.print(f"  {marca} {item.get('texto', '')}")
+            console.print(f'    [dim]"{str(item.get("trecho", ""))[:220]}"[/dim]')
+            if not confirmada:
+                console.print(f"    [yellow]{item.get('observacao', '')}[/yellow]")
+        console.print()
+
+    if afirmacoes:
+        confirmadas = sum(1 for a in afirmacoes if a.get("confirmada"))
+        console.print(
+            f"[dim]{confirmadas} de {len(afirmacoes)} afirmações conferidas no edital · "
+            f"{analise.get('modelo') or '—'} · {analise.get('tokens', 0)} tokens · "
+            f"{analise.get('caracteres_lidos', 0)} caracteres lidos[/dim]"
+        )
+    for alerta in analise.get("alertas") or []:
+        console.print(f"[yellow]! {alerta}[/yellow]")
+
+
+@app.command("analisar")
+def cmd_analisar(
+    numero: Annotated[str, typer.Argument(help="numeroControlePNCP da contratação")],
+    salvar: Annotated[bool, typer.Option("--salvar/--sem-salvar")] = True,
+) -> None:
+    """Baixa o edital, lê e resume — com o trecho de origem em cada afirmação."""
+    _configurar_log()
+    s = get_settings()
+
+    async def _executar() -> None:
+        console.print("[dim]baixando os anexos…[/dim]")
+        baixados = await baixar_edital(numero, maximo=s.analise_max_documentos, settings=s)
+        if not baixados:
+            console.print("[yellow]esta contratação não tem anexos legíveis[/yellow]")
+            return
+
+        for b in baixados:
+            console.print(f"  [dim]{b.caminho.name} ({b.bytes_gravados // 1024} KB)[/dim]")
+
+        leitura = ler_documentos([b.caminho for b in baixados])
+        console.print(f"[dim]{leitura.diagnostico}[/dim]")
+        if not leitura.texto:
+            console.print(
+                "[yellow]nada de texto para analisar — o edital provavelmente é "
+                "digitalizado e exigiria OCR[/yellow]"
+            )
+            return
+
+        async with Banco() as banco:
+            contratacoes = await MatchingRepo(banco).carregar_contratacoes(numeros=[numero])
+            objeto = contratacoes[0].objeto if contratacoes else ""
+
+            console.print("[dim]lendo o edital com o modelo…[/dim]")
+            analise = await analisar_edital(
+                llm=construir_llm(
+                    base_url=s.llm_base_url,
+                    modelo=s.llm_modelo,
+                    api_key=s.llm_api_key,
+                    timeout_s=s.llm_timeout_s,
+                ),
+                objeto=limpar_objeto(objeto),
+                texto_edital=leitura.texto,
+                orcamento_caracteres=s.analise_orcamento_caracteres,
+            )
+            _mostrar_resumo_gravado(analise.como_dict())
+
+            if salvar and contratacoes:
+                await AnaliseRepo(banco).salvar(
+                    numero,
+                    analise=analise.como_dict(),
+                    documentos=[b.como_dict() for b in baixados],
+                )
+                console.print("[dim]análise gravada no banco[/dim]")
 
     _rodar(_executar())
 

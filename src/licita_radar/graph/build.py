@@ -16,10 +16,17 @@
               │
       ┌───(aprovada)───┐
       ↓                ↓
-  notificar        arquivar
+  analisar         arquivar
+      │                │
+      ↓                │
+  notificar            │
       │                │
       └───→ END ←──────┘
 ```
+
+`analisar` fica depois da pessoa, não antes: baixar e resumir um edital de
+80 páginas é o passo mais caro do projeto, e pagá-lo por uma licitação que
+será descartada em dois segundos é gastar para não usar.
 
 O `thread_id` de cada execução é o `numeroControlePNCP`. É isso que torna
 o reprocessamento barato: retomar do checkpoint em vez de pagar de novo
@@ -50,8 +57,8 @@ def _apos_pontuacao(estado: EditalState) -> Literal["justificar", "arquivar"]:
     return "arquivar" if estado.get("situacao") == "abaixo_limiar" else "justificar"
 
 
-def _apos_revisao(estado: EditalState) -> Literal["notificar", "arquivar"]:
-    return "notificar" if estado.get("decisao_humana") == "aprovada" else "arquivar"
+def _apos_revisao(estado: EditalState) -> Literal["analisar", "arquivar"]:
+    return "analisar" if estado.get("decisao_humana") == "aprovada" else "arquivar"
 
 
 def construir_grafo(deps: Dependencias) -> Any:
@@ -67,10 +74,14 @@ def construir_grafo(deps: Dependencias) -> Any:
     async def _justificar(estado: EditalState) -> EditalState:
         return await nodes.justificar(estado, deps)
 
+    async def _analisar(estado: EditalState) -> EditalState:
+        return await nodes.analisar(estado, deps)
+
     grafo.add_node("triar", _sincrono(nodes.triar))
     grafo.add_node("pontuar", _sincrono(nodes.pontuar))
     grafo.add_node("justificar", _justificar)
     grafo.add_node("revisar", nodes.revisar)
+    grafo.add_node("analisar", _analisar)
     grafo.add_node("notificar", nodes.notificar)
     grafo.add_node("arquivar", nodes.arquivar)
 
@@ -81,7 +92,8 @@ def construir_grafo(deps: Dependencias) -> Any:
     grafo.add_conditional_edges("triar", _apos_triagem, ["pontuar", "arquivar"])
     grafo.add_conditional_edges("pontuar", _apos_pontuacao, ["justificar", "arquivar"])
     grafo.add_edge("justificar", "revisar")
-    grafo.add_conditional_edges("revisar", _apos_revisao, ["notificar", "arquivar"])
+    grafo.add_conditional_edges("revisar", _apos_revisao, ["analisar", "arquivar"])
+    grafo.add_edge("analisar", "notificar")
 
     grafo.add_edge("notificar", END)
     grafo.add_edge("arquivar", END)
