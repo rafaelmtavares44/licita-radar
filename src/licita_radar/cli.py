@@ -14,6 +14,7 @@ from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from licita_radar.analise.analista import ASSUNTOS, ROTULOS, analisar_edital
@@ -82,7 +83,7 @@ def _rodar(corrotina: Any) -> Any:
     try:
         return asyncio.run(corrotina)
     except _ERROS_COM_RECADO as erro:
-        console.print(f"[bold red]{erro}[/bold red]")
+        console.print(f"[bold red]{escape(str(erro))}[/bold red]")
         raise typer.Exit(code=1) from erro
 
 
@@ -599,7 +600,7 @@ def cmd_servir(
     except ImportError:
         console.print(
             "[bold red]o painel precisa do extra web[/bold red]\n"
-            'instale com: [bold]pip install -e ".[web]"[/bold]'
+            + escape('instale com: pip install -e ".[web]"')
         )
         raise typer.Exit(code=1) from None
 
@@ -655,10 +656,13 @@ def cmd_doctor(
         if c.grupo != grupo_atual:
             grupo_atual = c.grupo
             console.print(f"\n[bold]{grupo_atual}[/bold]")
-        detalhe = f"  [dim]{c.detalhe}[/dim]" if c.detalhe else ""
-        console.print(f"  {simbolo[c.estado]} {c.titulo}{detalhe}")
+        detalhe = f"  [dim]{escape(c.detalhe)}[/dim]" if c.detalhe else ""
+        console.print(f"  {simbolo[c.estado]} {escape(c.titulo)}{detalhe}")
         if c.dica:
-            console.print(f"      [yellow]→ {c.dica}[/yellow]")
+            # A dica é texto do diagnóstico, não marcação: sem escapar,
+            # `pip install -e ".[semantico]"` perde justamente o extra que
+            # a pessoa precisa instalar.
+            console.print(f"      [yellow]→ {escape(c.dica)}[/yellow]")
 
     falhas = [c for c in checagens if c.estado is Estado.FALHA]
     console.print()

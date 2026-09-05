@@ -236,3 +236,31 @@ async def test_decisao_invalida_e_recusada_pelo_esquema(cliente: Any) -> None:
         resposta = await http.post(f"/api/candidatas/{CHAVE}/decisao", json={"decisao": "talvez"})
 
     assert resposta.status_code == 422
+
+
+class TestMensagemNaoEMarcacao:
+    """Rich come `[web]` achando que é estilo — e some com o extra a instalar.
+
+    O erro apareceu na mensagem que ensina a instalar o painel: ela
+    imprimiu `pip install -e "."`, um comando que não resolve nada. Toda
+    mensagem que vem de dado (exceção, dica do doctor) precisa ser
+    escapada antes de encontrar a marcação.
+    """
+
+    def test_extra_entre_colchetes_sobrevive_a_impressao(self) -> None:
+        from rich.console import Console
+        from rich.markup import escape
+
+        gravador = Console(record=True, width=200)
+        gravador.print(escape('instale com: pip install -e ".[web]"'))
+
+        assert ".[web]" in gravador.export_text()
+
+    def test_sem_escapar_o_extra_desapareceria(self) -> None:
+        """A prova de que o cuidado é necessário, não decorativo."""
+        from rich.console import Console
+
+        gravador = Console(record=True, width=200)
+        gravador.print('instale com: pip install -e ".[web]"')
+
+        assert "[web]" not in gravador.export_text()
