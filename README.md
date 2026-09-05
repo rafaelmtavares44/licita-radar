@@ -105,6 +105,7 @@ problema com a instrução do conserto.
 | `licita-radar revisar` | Mostra o que espera decisão; ao aprovar, já lê o edital |
 | `licita-radar documentos` | Lista (e baixa, com `--baixar`) os anexos de uma contratação |
 | `licita-radar analisar` | Resume o edital com o trecho de origem em cada afirmação |
+| `licita-radar servir` | Sobe a API e o painel web |
 | `licita-radar doctor` | Diagnostica o ambiente quando algo não funciona |
 
 ### Onde procurar
@@ -123,6 +124,25 @@ restricoes:
   ufs: []              # vazio = Brasil inteiro
   esferas: ["F"]       # só o governo federal — E estadual, M municipal
 ```
+
+### O painel
+
+```bash
+pip install -e ".[web]"
+licita-radar servir            # http://127.0.0.1:8000
+```
+
+A tela lista as candidatas por score, mostra por que cada uma apareceu e deixa aprovar ou rejeitar ali mesmo — aprovar baixa o edital e o resume, com o trecho de origem embaixo de cada afirmação e a marca ✓ / ≈ / ? ao lado. A decisão retoma o mesmo grafo do `licita-radar revisar`: as duas interfaces conversam com o mesmo checkpoint.
+
+Para mexer no front:
+
+```bash
+cd web && npm install
+npm run dev                    # http://localhost:5173, recarrega ao salvar
+npm run build                  # gera web/dist, que o `servir` passa a entregar
+```
+
+Sem `web/dist`, o `servir` entrega só a API — e ela sozinha já é útil, com documentação interativa em `/docs`.
 
 ### Calibrando sem baixar modelo
 
@@ -208,7 +228,7 @@ A [API de consultas](https://pncp.gov.br/api/consulta/swagger-ui/index.html) é 
 | M2 | Funil de matching (léxico + semântico) | ✅ |
 | M3 | Grafo LangGraph com checkpoint e revisão humana | ✅ |
 | M4 | Analista de editais: download, extração e resumo com citação | ✅ |
-| M5 | Painel web | ⬜ |
+| M5 | Painel web: API HTTP e a tela de decisão | ✅ |
 | M6 | Alerta no Telegram e release `v0.1.0` | ⬜ |
 
 O alerta desceu na fila de propósito: sem o resumo do edital, ele avisaria a mesma coisa que os portais de licitação já avisam. Fora do escopo, ainda: múltiplos perfis, API HTTP e OCR de edital digitalizado — estão em [`docs/roadmap.md`](docs/roadmap.md) esperando a vez.
