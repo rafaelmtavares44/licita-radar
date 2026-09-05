@@ -584,6 +584,50 @@ def cmd_analisar(
     _rodar(_executar())
 
 
+@app.command("servir")
+def cmd_servir(
+    porta: Annotated[int, typer.Option("--porta", "-P")] = 8000,
+    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+    recarregar: Annotated[
+        bool, typer.Option("--recarregar", help="Reinicia ao salvar (desenvolvimento)")
+    ] = False,
+) -> None:
+    """Sobe a API e o painel web."""
+    _configurar_log()
+    try:
+        import uvicorn
+    except ImportError:
+        console.print(
+            "[bold red]o painel precisa do extra web[/bold red]\n"
+            'instale com: [bold]pip install -e ".[web]"[/bold]'
+        )
+        raise typer.Exit(code=1) from None
+
+    from licita_radar.api.app import PAINEL
+
+    console.print(f"[bold green]http://{host}:{porta}[/bold green]")
+    if not PAINEL.is_dir():
+        console.print(
+            "[dim]painel ainda não construído — servindo só a API.[/dim]\n"
+            f"[dim]documentação interativa: http://{host}:{porta}/docs[/dim]\n"
+            "[dim]para a tela: cd web && npm install && npm run dev[/dim]"
+        )
+
+    uvicorn.run(
+        "licita_radar.api.app:criar_app",
+        factory=True,
+        host=host,
+        port=porta,
+        reload=recarregar,
+        # No Windows o uvicorn herda a política de event loop que este
+        # módulo já ajustou na importação. `uvloop` mudaria isso, e o
+        # psycopg assíncrono não sobrevive ao Proactor — ver o topo do
+        # arquivo.
+        loop="asyncio",
+        log_config=None,
+    )
+
+
 @app.command("doctor")
 def cmd_doctor(
     sem_rede: Annotated[

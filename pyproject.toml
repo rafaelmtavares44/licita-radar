@@ -45,6 +45,11 @@ documentos = [
     # texto separado vai parar no fim da linha e some do lugar dele.
     "pypdf>=5.0",
 ]
+# O painel: API HTTP. O front (React/Vite) é construído à parte, em web/.
+web = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
@@ -58,6 +63,8 @@ dev = [
     "langgraph>=1.0",
     "langgraph-checkpoint-postgres>=3.0",
     "pypdf>=5.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
 ]
 
 [project.scripts]
