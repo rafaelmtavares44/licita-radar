@@ -674,6 +674,36 @@ async def _avisar_da_triagem(execucoes: list[Any], contratacoes: list[Any]) -> N
     )
 
 
+@app.command("atualizar")
+def cmd_atualizar(
+    brasil: Annotated[bool, typer.Option("--brasil/--uf-do-perfil")] = True,
+    ate: Annotated[int, typer.Option("--ate", help="Janela de prazo, em dias")] = 30,
+    limite: Annotated[int, typer.Option("--limite", "-n")] = 200,
+    caminho_perfil: Annotated[Path | None, typer.Option("--perfil", "-p")] = None,
+) -> None:
+    """Coleta, pontua e passa pelo grafo — o ciclo inteiro, de uma vez.
+
+    Existe porque o painel é uma janela sobre o que estes três passos
+    produziram, e nada os executa sozinho. Sem um comando único, "atualizar
+    o radar" eram três comandos na ordem certa — e a tela continuava
+    mostrando o resultado de dias atrás sem avisar que era de dias atrás.
+
+    É este o comando para agendar.
+    """
+    _configurar_log()
+    caminho = caminho_perfil or get_settings().perfil_path
+    perfil = _carregar_ou_sair(caminho)
+
+    console.print(f"[bold]1/3[/bold] coletando do PNCP · prazo até {ate} dias à frente")
+    cmd_ingest(brasil=brasil, ate=ate, caminho_perfil=caminho)
+
+    console.print(f"\n[bold]2/3[/bold] pontuando contra o perfil [bold]{perfil.nome}[/bold]")
+    cmd_match(limite=limite, caminho_perfil=caminho)
+
+    console.print("\n[bold]3/3[/bold] passando pelo grafo")
+    cmd_radar(limite=limite, caminho_perfil=caminho)
+
+
 @app.command("alertar")
 def cmd_alertar(
     teste: Annotated[

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -22,11 +22,28 @@ class AvaliacoesFalsas:
     def __init__(self, linhas: list[dict[str, Any]] | None = None) -> None:
         self.linhas = linhas if linhas is not None else [_linha()]
 
-    async def ranking(self, **_: Any) -> list[dict[str, Any]]:
-        return self.linhas
+    async def ranking(self, *, apenas_abertas: bool = False, **_: Any) -> list[dict[str, Any]]:
+        if not apenas_abertas:
+            return self.linhas
+        hoje = date.today()
+        return [
+            linha
+            for linha in self.linhas
+            if linha.get("encerramento_proposta") is None or linha["encerramento_proposta"] >= hoje
+        ]
 
     async def resumo(self, **_: Any) -> dict[str, int]:
         return {"candidata": 3, "abaixo_limiar": 40, "descartada": 7}
+
+
+class ExecucoesFalsas:
+    def __init__(self, quando: datetime | None = None) -> None:
+        self.quando = quando
+
+    async def ultima(self) -> dict[str, Any] | None:
+        if self.quando is None:
+            return None
+        return {"concluida_em": self.quando, "total_novas": 12, "total_vistas": 300}
 
 
 class AnalisesFalsas:
@@ -102,6 +119,7 @@ def contexto(perfil: Perfil) -> Contexto:
         perfil=perfil,
         avaliacoes=AvaliacoesFalsas(),
         analises=AnalisesFalsas(),
+        execucoes=ExecucoesFalsas(datetime(2026, 9, 9, 7, 30)),
     )
 
 
@@ -133,8 +151,75 @@ async def test_resumo_traz_o_funil(cliente: Any) -> None:
 
     assert resposta.status_code == 200
     corpo = resposta.json()
-    assert corpo["candidatas"] == 3
+    # `candidatas` conta o que ainda dá tempo de disputar, não o histórico
+    assert corpo["candidatas"] == 1
     assert corpo["por_veredito"]["abaixo_limiar"] == 40
+
+
+@pytest.mark.asyncio
+async def test_resumo_diz_quando_foi_a_ultima_coleta(cliente: Any) -> None:
+    """Sem isso, tela com dado de quatro dias parece tela atualizada."""
+    async with cliente as http:
+        corpo = (await http.get("/api/resumo")).json()
+
+    assert corpo["ultima_coleta"].startswith("2026-09-09")
+    assert corpo["novas_na_ultima"] == 12
+
+
+@pytest.mark.asyncio
+async def test_sem_nenhuma_coleta_o_campo_vem_vazio(contexto: Contexto) -> None:
+    contexto.execucoes = ExecucoesFalsas(None)
+    app = criar_app(servir_painel=False)
+    app.dependency_overrides[obter_contexto] = lambda: contexto
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://teste"
+    ) as http:
+        corpo = (await http.get("/api/resumo")).json()
+
+    assert corpo["ultima_coleta"] is None
+
+
+class TestPrazoVencido:
+    """Licitação encerrada é ruído: ocupa a lista e não há o que fazer."""
+
+    @pytest.fixture
+    def com_vencida(self, contexto: Contexto) -> Contexto:
+        ontem = date.today() - timedelta(days=1)
+        contexto.avaliacoes = AvaliacoesFalsas(
+            [
+                _linha(),
+                _linha(numero_controle_pncp="x-1-9/2026", encerramento_proposta=ontem),
+            ]
+        )
+        return contexto
+
+    def _cliente(self, contexto: Contexto) -> Any:
+        app = criar_app(servir_painel=False)
+        app.dependency_overrides[obter_contexto] = lambda: contexto
+        return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://teste")
+
+    @pytest.mark.asyncio
+    async def test_por_padrao_some_da_lista(self, com_vencida: Contexto) -> None:
+        async with self._cliente(com_vencida) as http:
+            itens = (await http.get("/api/candidatas")).json()
+
+        assert [i["numero_controle"] for i in itens] == [NUMERO]
+
+    @pytest.mark.asyncio
+    async def test_mas_continua_alcancavel_de_propósito(self, com_vencida: Contexto) -> None:
+        """Sumir com o dado sem oferecer como vê-lo seria esconder, não filtrar."""
+        async with self._cliente(com_vencida) as http:
+            itens = (await http.get("/api/candidatas?encerradas=true")).json()
+
+        assert len(itens) == 2
+
+    @pytest.mark.asyncio
+    async def test_o_resumo_conta_quantas_foram_escondidas(self, com_vencida: Contexto) -> None:
+        async with self._cliente(com_vencida) as http:
+            corpo = (await http.get("/api/resumo")).json()
+
+        assert corpo["encerradas_escondidas"] == 1
 
 
 @pytest.mark.asyncio

@@ -28,6 +28,7 @@ from licita_radar.matching.limpeza import limpar_objeto
 from licita_radar.storage.analise_repo import AnaliseRepo
 from licita_radar.storage.db import Banco
 from licita_radar.storage.matching_repo import AvaliacaoRepo
+from licita_radar.storage.repositories import ExecucaoRepo
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ class Contexto:
     perfil: Perfil
     avaliacoes: Any
     analises: Any
+    execucoes: Any = None
     trabalhos: Trabalhos = field(default_factory=Trabalhos)
 
     @classmethod
@@ -91,6 +93,7 @@ class Contexto:
             perfil=perfil,
             avaliacoes=AvaliacaoRepo(banco),
             analises=AnaliseRepo(banco),
+            execucoes=ExecucaoRepo(banco),
         )
 
 
@@ -183,20 +186,42 @@ async def resumo(contexto: Contexto) -> ResumoFunil:
             cursor = await conn.execute("SELECT count(*) FROM analise_edital")
             analisadas = int((await cursor.fetchone() or [0])[0])
 
+    ultima = await contexto.execucoes.ultima() if contexto.execucoes else None
+
+    # Quantas candidatas o filtro de prazo tirou da tela — o número existe
+    # para a interface poder oferecer "mostrar encerradas" em vez de
+    # simplesmente sumir com elas.
+    abertas = await contexto.avaliacoes.ranking(
+        perfil_id=contexto.perfil.id, limite=200, apenas_candidatas=True, apenas_abertas=True
+    )
+    todas = await contexto.avaliacoes.ranking(
+        perfil_id=contexto.perfil.id, limite=200, apenas_candidatas=True
+    )
+
     return ResumoFunil(
         contratacoes=total,
         avaliadas=sum(por_veredito.values()),
-        candidatas=por_veredito.get("candidata", 0),
+        candidatas=len(abertas),
         analisadas=analisadas,
         por_veredito=por_veredito,
+        ultima_coleta=_iso(ultima.get("concluida_em")) if ultima else None,
+        novas_na_ultima=int(ultima.get("total_novas") or 0) if ultima else 0,
+        encerradas_escondidas=max(0, len(todas) - len(abertas)),
     )
 
 
 async def listar(
-    contexto: Contexto, *, limite: int = 30, so_candidatas: bool = True
+    contexto: Contexto,
+    *,
+    limite: int = 30,
+    so_candidatas: bool = True,
+    so_abertas: bool = True,
 ) -> list[ItemLista]:
     linhas = await contexto.avaliacoes.ranking(
-        perfil_id=contexto.perfil.id, limite=limite, apenas_candidatas=so_candidatas
+        perfil_id=contexto.perfil.id,
+        limite=limite,
+        apenas_candidatas=so_candidatas,
+        apenas_abertas=so_abertas,
     )
     itens = []
     for linha in linhas:

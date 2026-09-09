@@ -142,6 +142,29 @@ class ExecucaoRepo:
             await conn.commit()
         return int(linha[0]) if linha else 0
 
+    async def ultima(self) -> dict[str, Any] | None:
+        """Quando foi a última coleta bem-sucedida, e o que ela trouxe.
+
+        Existe porque um painel que mostra dado de quatro dias atrás sem
+        dizer que ele é de quatro dias atrás não está informando: está
+        enganando com precisão.
+        """
+        async with (
+            self._banco.conexao() as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            await cur.execute(
+                """
+                SELECT iniciada_em, concluida_em, total_vistas, total_novas, uf, erro
+                  FROM execucao_ingestao
+                 WHERE concluida_em IS NOT NULL
+                 ORDER BY concluida_em DESC
+                 LIMIT 1
+                """
+            )
+            linha = await cur.fetchone()
+        return dict(linha) if linha else None
+
     async def concluir(
         self, execucao_id: int, *, resultado: ResultadoIngestao, erro: str | None = None
     ) -> None:

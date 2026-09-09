@@ -111,8 +111,13 @@ def criar_app(settings: Settings | None = None, *, servir_painel: bool = True) -
         contexto: Ctx,
         limite: Annotated[int, Query(ge=1, le=200)] = 30,
         todas: Annotated[bool, Query(description="Inclui as descartadas pelo funil")] = False,
+        encerradas: Annotated[
+            bool, Query(description="Inclui as que já passaram do prazo de proposta")
+        ] = False,
     ) -> list[ItemLista]:
-        return await servico.listar(contexto, limite=limite, so_candidatas=not todas)
+        return await servico.listar(
+            contexto, limite=limite, so_candidatas=not todas, so_abertas=not encerradas
+        )
 
     @app.get("/api/candidatas/{chave}", response_model=Detalhe)
     async def detalhe(contexto: Ctx, chave: str) -> Detalhe:

@@ -13,15 +13,31 @@ export function Lista({
   itens,
   selecionada,
   aoEscolher,
+  encerradasEscondidas,
+  mostrandoEncerradas,
+  aoAlternarEncerradas,
 }: {
   itens: ItemLista[];
   selecionada: string | null;
   aoEscolher: (chave: string) => void;
+  encerradasEscondidas: number;
+  mostrandoEncerradas: boolean;
+  aoAlternarEncerradas: () => void;
 }) {
   return (
     <nav className="lista" aria-label="Candidatas">
       <div className="lista-titulo">
-        {itens.length} candidata{itens.length === 1 ? "" : "s"}
+        <span>
+          {itens.length} candidata{itens.length === 1 ? "" : "s"}
+        </span>
+        {/* Esconder sem oferecer como ver seria filtrar às escondidas. */}
+        {(encerradasEscondidas > 0 || mostrandoEncerradas) && (
+          <button className="alternar" onClick={aoAlternarEncerradas}>
+            {mostrandoEncerradas
+              ? "ocultar encerradas"
+              : `+${encerradasEscondidas} encerrada${encerradasEscondidas === 1 ? "" : "s"}`}
+          </button>
+        )}
       </div>
 
       {itens.map((item) => {

@@ -28,13 +28,21 @@ class Saude(BaseModel):
 
 
 class ResumoFunil(BaseModel):
-    """Quantas contratações caíram em cada estágio do funil."""
+    """Quantas contratações caíram em cada estágio do funil.
+
+    `ultima_coleta` não é enfeite de rodapé: sem ela, uma tela com dado de
+    quatro dias atrás é indistinguível de uma tela atualizada agora — e
+    quem olha conclui que o PNCP é que está parado.
+    """
 
     contratacoes: int = 0
     avaliadas: int = 0
     candidatas: int = 0
     analisadas: int = 0
     por_veredito: dict[str, int] = Field(default_factory=dict)
+    ultima_coleta: str | None = None
+    novas_na_ultima: int = 0
+    encerradas_escondidas: int = 0
 
 
 class ItemLista(BaseModel):

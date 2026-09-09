@@ -624,3 +624,40 @@ button {
     transform: rotate(360deg);
   }
 }
+
+/* --------------------------------- idade do dado e prazo vencido */
+
+.lista-titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alternar {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tinta-fraca);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.alternar:hover {
+  color: var(--cobalto);
+  border-color: var(--cobalto);
+}
+
+/* A coleta não roda sozinha. Quando o dado passa de um dia, o número
+   para de ser informação e vira aviso — por isso muda de cor. */
+.medidor.coleta b {
+  font-size: 15px;
+}
+
+.medidor.coleta.vencida b,
+.medidor.coleta.vencida small {
+  color: var(--duvida);
+}

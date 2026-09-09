@@ -54,6 +54,9 @@ export interface ResumoFunil {
   candidatas: number;
   analisadas: number;
   por_veredito: Record<string, number>;
+  ultima_coleta: string | null;
+  novas_na_ultima: number;
+  encerradas_escondidas: number;
 }
 
 export interface EstadoDoTrabalho {

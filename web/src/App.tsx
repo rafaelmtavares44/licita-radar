@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ErroDaApi, api } from "./api";
+import { ErroDaApi, api, desdeQuando } from "./api";
 import { PainelDeDetalhe } from "./componentes/Detalhe";
 import { Lista } from "./componentes/Lista";
 import type { Detalhe, ItemLista, ResumoFunil } from "./tipos";
@@ -7,12 +7,46 @@ import type { Detalhe, ItemLista, ResumoFunil } from "./tipos";
 /** De quanto em quanto tempo perguntar se o edital já foi lido. */
 const INTERVALO_DA_ESPERA = 2000;
 
+/** O cabeçalho, com a idade do dado em destaque.
+ *
+ * A coleta não roda sozinha, e sem esta linha uma tela com dado de quatro
+ * dias atrás é idêntica a uma tela atualizada agora. O erro que ela evita
+ * não é de leitura: é concluir que o PNCP parou de publicar.
+ */
+function Medidores({ resumo }: { resumo: ResumoFunil }) {
+  const { texto, horas } = desdeQuando(resumo.ultima_coleta);
+  const velho = horas === null || horas > 24;
+
+  return (
+    <div className="medidores">
+      <div className="medidor">
+        <b>{resumo.contratacoes.toLocaleString("pt-BR")}</b>
+        <small>coletadas</small>
+      </div>
+      <div className="medidor">
+        <b>{resumo.candidatas}</b>
+        <small>abertas agora</small>
+      </div>
+      <div className="medidor">
+        <b>{resumo.analisadas}</b>
+        <small>editais lidos</small>
+      </div>
+      <div className={`medidor coleta${velho ? " vencida" : ""}`} title="licita-radar atualizar">
+        <b>{texto}</b>
+        <small>{velho ? "rode `licita-radar atualizar`" : "última coleta"}</small>
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const [resumo, setResumo] = useState<ResumoFunil | null>(null);
   const [itens, setItens] = useState<ItemLista[]>([]);
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
   const [analisando, setAnalisando] = useState(false);
+  const [comEncerradas, setComEncerradas] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
 
@@ -20,7 +54,10 @@ export default function App() {
 
   const carregar = useCallback(async () => {
     try {
-      const [novoResumo, novosItens] = await Promise.all([api.resumo(), api.candidatas()]);
+      const [novoResumo, novosItens] = await Promise.all([
+        api.resumo(),
+        api.candidatas(40, comEncerradas),
+      ]);
       setResumo(novoResumo);
       setItens(novosItens);
       setFalha(null);
@@ -30,7 +67,7 @@ export default function App() {
     } finally {
       setCarregando(false);
     }
-  }, []);
+  }, [comEncerradas]);
 
   useEffect(() => {
     void carregar();
@@ -112,36 +149,28 @@ export default function App() {
         <div className="marca">
           licita<span>·</span>radar
         </div>
-        {resumo && (
-          <div className="medidores">
-            <div className="medidor">
-              <b>{resumo.contratacoes.toLocaleString("pt-BR")}</b>
-              <small>coletadas</small>
-            </div>
-            <div className="medidor">
-              <b>{resumo.candidatas}</b>
-              <small>candidatas</small>
-            </div>
-            <div className="medidor">
-              <b>{resumo.analisadas}</b>
-              <small>editais lidos</small>
-            </div>
-          </div>
-        )}
+        {resumo && <Medidores resumo={resumo} />}
       </header>
 
       {falha && <p className="falha">{falha}</p>}
 
       <div className="corpo">
         {itens.length > 0 ? (
-          <Lista itens={itens} selecionada={selecionada} aoEscolher={setSelecionada} />
+          <Lista
+            itens={itens}
+            selecionada={selecionada}
+            aoEscolher={setSelecionada}
+            encerradasEscondidas={resumo?.encerradas_escondidas ?? 0}
+            mostrandoEncerradas={comEncerradas}
+            aoAlternarEncerradas={() => setComEncerradas((v) => !v)}
+          />
         ) : (
           <nav className="lista">
             <div className="vazio">
               <h2>{carregando ? "carregando…" : "nenhuma candidata ainda"}</h2>
               {!carregando && (
                 <p>
-                  Rode <code>licita-radar ingest</code>, depois <code>licita-radar radar</code>.
+                  Rode <code>licita-radar atualizar</code>.
                 </p>
               )}
             </div>

@@ -105,6 +105,7 @@ problema com a instrução do conserto.
 | `licita-radar revisar` | Mostra o que espera decisão; ao aprovar, já lê o edital |
 | `licita-radar documentos` | Lista (e baixa, com `--baixar`) os anexos de uma contratação |
 | `licita-radar analisar` | Resume o edital com o trecho de origem em cada afirmação |
+| `licita-radar atualizar` | Coleta, pontua e roda o grafo — o ciclo inteiro, para agendar |
 | `licita-radar servir` | Sobe a API e o painel web |
 | `licita-radar alertar` | Confere o canal do Telegram e ajuda a configurá-lo |
 | `licita-radar doctor` | Diagnostica o ambiente quando algo não funciona |
@@ -125,6 +126,24 @@ restricoes:
   ufs: []              # vazio = Brasil inteiro
   esferas: ["F"]       # só o governo federal — E estadual, M municipal
 ```
+
+### Mantendo o radar atualizado
+
+Nada roda sozinho: o painel é uma janela sobre o que estes passos produziram.
+
+```bash
+licita-radar atualizar        # ingest + match + radar, de uma vez
+```
+
+O cabeçalho do painel mostra **quando foi a última coleta** e fica âmbar quando passa de um dia — porque uma tela com dado de quatro dias atrás é indistinguível de uma tela atualizada agora, e quem olha conclui que o PNCP é que parou de publicar.
+
+Para rodar todo dia de manhã, agende o comando no seu sistema. No Windows, pelo **Agendador de Tarefas**; no Linux ou macOS, no `cron`:
+
+```cron
+0 7 * * 1-5  cd /caminho/do/licita-radar && .venv/bin/licita-radar atualizar
+```
+
+Licitação com prazo vencido some da lista por padrão — ela ocupa espaço e não há nada a fazer a respeito. O contador `+N encerradas` no topo da lista traz de volta quando você quiser.
 
 ### O painel
 

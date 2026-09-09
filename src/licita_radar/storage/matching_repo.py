@@ -227,8 +227,20 @@ class AvaliacaoRepo:
         return len(avaliacoes)
 
     async def ranking(
-        self, *, perfil_id: str, limite: int = 20, apenas_candidatas: bool = False
+        self,
+        *,
+        perfil_id: str,
+        limite: int = 20,
+        apenas_candidatas: bool = False,
+        apenas_abertas: bool = False,
     ) -> list[dict[str, object]]:
+        """O ranking do perfil.
+
+        `apenas_abertas` existe porque licitação com prazo vencido é ruído
+        num radar: ela ocupa a lista, empurra para baixo o que ainda dá
+        tempo de disputar, e não há nada a fazer a respeito dela. No
+        terminal isso passava; numa tela que fica aberta o dia todo, não.
+        """
         sql = """
             SELECT a.numero_controle_pncp, a.score_lexical, a.score_semantico, a.score_final,
                    a.veredito, a.palavras_encontradas, a.motivo,
@@ -238,6 +250,9 @@ class AvaliacaoRepo:
               JOIN contratacao c USING (numero_controle_pncp)
              WHERE a.perfil_id = %(perfil)s
                AND (NOT %(so_candidatas)s OR a.veredito = 'candidata')
+               AND (NOT %(so_abertas)s
+                    OR c.encerramento_proposta IS NULL
+                    OR c.encerramento_proposta >= now())
              ORDER BY a.score_final DESC, c.encerramento_proposta ASC NULLS LAST
              LIMIT %(limite)s
         """
@@ -250,6 +265,7 @@ class AvaliacaoRepo:
                 {
                     "perfil": perfil_id,
                     "so_candidatas": apenas_candidatas,
+                    "so_abertas": apenas_abertas,
                     "limite": limite,
                 },
             )
