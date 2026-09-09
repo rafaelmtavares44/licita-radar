@@ -73,7 +73,14 @@ class LLMFalso:
     def ativo(self) -> bool:
         return True
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 600) -> Resposta:
+    async def responder(
+        self,
+        *,
+        sistema: str,
+        usuario: str,
+        max_tokens: int = 600,
+        formato_json: bool = False,
+    ) -> Resposta:
         self.prompts.append(usuario)
         indice = min(self.chamadas, len(self._respostas) - 1)
         self.chamadas += 1
@@ -91,5 +98,12 @@ class LLMQueFalha:
     def ativo(self) -> bool:
         return True
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 600) -> Resposta:
+    async def responder(
+        self,
+        *,
+        sistema: str,
+        usuario: str,
+        max_tokens: int = 600,
+        formato_json: bool = False,
+    ) -> Resposta:
         raise RuntimeError("503 Service Unavailable")

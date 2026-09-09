@@ -177,7 +177,7 @@ async def analisar_edital(
     objeto: str,
     texto_edital: str,
     orcamento_caracteres: int = 24_000,
-    max_tokens: int = 1500,
+    max_tokens: int = 3000,
 ) -> Analise:
     """Recorta, pergunta ao modelo e confere cada citação contra o original.
 
@@ -206,6 +206,11 @@ async def analisar_edital(
             sistema=SISTEMA_ANALISE,
             usuario=prompt_analise(objeto=objeto, edital=recorte, faltantes=faltantes),
             max_tokens=max_tokens,
+            # Pedir JSON ao provedor restringe a geração; pedir no prompt
+            # apenas convence. Com um edital de 130 mil caracteres pela
+            # frente, a diferença é entre 8 mil tokens aproveitados e 8 mil
+            # tokens perdidos numa chave que faltou fechar.
+            formato_json=True,
         )
     except Exception as erro:
         logger.warning("o modelo falhou ao analisar o edital: %s", erro)

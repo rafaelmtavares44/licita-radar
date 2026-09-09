@@ -47,7 +47,7 @@ class LLMFalso:
     def ativo(self) -> bool:
         return True
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 220) -> Resposta:
+    async def responder(self, **_: Any) -> Resposta:
         self.chamadas += 1
         return Resposta(texto=self._texto, modelo=self.modelo, tokens=42)
 

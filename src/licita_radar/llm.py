@@ -18,14 +18,26 @@ funil, e o que não é medido vira surpresa no fim do mês.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+#: Códigos em que insistir faz sentido. 429 é o caso comum nas camadas
+#: gratuitas: não é erro, é o provedor pedindo para diminuir o ritmo.
+_STATUS_RETENTAVEIS = frozenset({429, 500, 502, 503, 504})
+
+#: O cliente do PNCP já tinha aprendido isto, e o do LLM não: uma análise
+#: de edital gasta uns 8 mil tokens, e três seguidas estouram o limite por
+#: minuto de qualquer plano gratuito. Sem espera, o alerta some e a pessoa
+#: vê "o modelo falhou" sem saber que bastava aguardar vinte segundos.
+_TENTATIVAS = 4
 
 
 #: Modelos que raciocinam antes de responder. O nome é o único sinal
@@ -36,6 +48,34 @@ _MARCAS_DE_RACIOCINIO = ("gpt-oss", "o1", "o3", "o4", "deepseek-r", "qwq", "thin
 def e_de_raciocinio(modelo: str) -> bool:
     nome = modelo.lower()
     return any(marca in nome for marca in _MARCAS_DE_RACIOCINIO)
+
+
+#: `Retry-After: 20` ou, na Groq, `retry-after: 19.153` no corpo do erro.
+_SEGUNDOS_NO_TEXTO = re.compile(r"try again in ([\d.]+)s", re.IGNORECASE)
+
+
+def espera_pedida(resposta: httpx.Response) -> float | None:
+    """Quantos segundos o provedor pediu para esperar, se pediu.
+
+    O cabeçalho é o caminho padrão; a Groq também põe o número na
+    mensagem de erro ("Please try again in 19.153s"), e ler dali é a
+    diferença entre esperar o certo e chutar.
+    """
+    cabecalho = resposta.headers.get("Retry-After") or resposta.headers.get("retry-after")
+    if cabecalho:
+        try:
+            return min(float(cabecalho), 120.0)
+        except ValueError:
+            pass
+
+    try:
+        mensagem = str(resposta.json().get("error", {}).get("message", ""))
+    except ValueError:
+        return None
+
+    if achado := _SEGUNDOS_NO_TEXTO.search(mensagem):
+        return min(float(achado.group(1)) + 1.0, 120.0)
+    return None
 
 
 @dataclass(frozen=True)
@@ -53,7 +93,14 @@ class LLM(Protocol):
     @property
     def ativo(self) -> bool: ...
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 600) -> Resposta: ...
+    async def responder(
+        self,
+        *,
+        sistema: str,
+        usuario: str,
+        max_tokens: int = 600,
+        formato_json: bool = False,
+    ) -> Resposta: ...
 
 
 class LLMDesligado:
@@ -72,7 +119,14 @@ class LLMDesligado:
     def ativo(self) -> bool:
         return False
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 600) -> Resposta:
+    async def responder(
+        self,
+        *,
+        sistema: str,
+        usuario: str,
+        max_tokens: int = 600,
+        formato_json: bool = False,
+    ) -> Resposta:
         return Resposta(texto="", modelo=self.modelo, tokens=0)
 
 
@@ -100,7 +154,14 @@ class LLMCompativelOpenAI:
     def ativo(self) -> bool:
         return True
 
-    async def responder(self, *, sistema: str, usuario: str, max_tokens: int = 600) -> Resposta:
+    async def responder(
+        self,
+        *,
+        sistema: str,
+        usuario: str,
+        max_tokens: int = 600,
+        formato_json: bool = False,
+    ) -> Resposta:
         cabecalhos = {"Content-Type": "application/json"}
         if self._api_key:
             cabecalhos["Authorization"] = f"Bearer {self._api_key}"
@@ -125,12 +186,23 @@ class LLMCompativelOpenAI:
         if e_de_raciocinio(self._modelo):
             corpo["reasoning_effort"] = "low"
 
-        async with httpx.AsyncClient(timeout=self._timeout) as cliente:
-            resposta = await cliente.post(
-                f"{self._base_url}/chat/completions", headers=cabecalhos, json=corpo
-            )
-            resposta.raise_for_status()
-            dados = resposta.json()
+        # Quando a resposta precisa ser JSON, pedir ao provedor é muito mais
+        # eficaz que pedir no prompt: o modelo passa a ser restringido na
+        # geração em vez de convencido por instrução.
+        if formato_json:
+            corpo["response_format"] = {"type": "json_object"}
+
+        try:
+            dados = await self._pedir(cabecalhos, corpo)
+        except httpx.HTTPStatusError as erro:
+            # Nem todo provedor aceita `response_format` — Ollama e LM Studio
+            # variam por modelo. Perder a análise inteira por um campo
+            # opcional seria trocar robustez por elegância.
+            if not (formato_json and erro.response.status_code == httpx.codes.BAD_REQUEST):
+                raise
+            logger.info("o provedor recusou response_format; repetindo sem ele")
+            corpo.pop("response_format", None)
+            dados = await self._pedir(cabecalhos, corpo)
 
         mensagem = dados["choices"][0].get("message") or {}
         texto = (mensagem.get("content") or "").strip()
@@ -149,6 +221,48 @@ class LLMCompativelOpenAI:
             modelo=dados.get("model", self._modelo),
             tokens=int(uso.get("total_tokens", 0)),
         )
+
+    async def _pedir(self, cabecalhos: dict[str, str], corpo: dict[str, Any]) -> dict[str, Any]:
+        """Uma chamada, com paciência para o limite de requisições.
+
+        O provedor manda `Retry-After` dizendo quantos segundos esperar —
+        obedecer é mais rápido e mais educado que backoff cego, e é o que
+        transforma um 429 em atraso de vinte segundos em vez de um alerta
+        perdido.
+        """
+        rota = f"{self._base_url}/chat/completions"
+        ultima: Exception | None = None
+
+        async with httpx.AsyncClient(timeout=self._timeout) as cliente:
+            for tentativa in range(1, _TENTATIVAS + 1):
+                try:
+                    resposta = await cliente.post(rota, headers=cabecalhos, json=corpo)
+                except httpx.TransportError as erro:
+                    ultima = erro
+                    if tentativa == _TENTATIVAS:
+                        raise
+                    await asyncio.sleep(2**tentativa)
+                    continue
+
+                if resposta.status_code not in _STATUS_RETENTAVEIS:
+                    resposta.raise_for_status()
+                    dados: dict[str, Any] = resposta.json()
+                    return dados
+
+                if tentativa == _TENTATIVAS:
+                    resposta.raise_for_status()
+
+                espera = espera_pedida(resposta) or float(2**tentativa)
+                logger.info(
+                    "o provedor respondeu %s; aguardando %.0fs (tentativa %d de %d)",
+                    resposta.status_code,
+                    espera,
+                    tentativa,
+                    _TENTATIVAS,
+                )
+                await asyncio.sleep(espera)
+
+        raise ultima or RuntimeError("não foi possível falar com o provedor")
 
 
 def construir_llm(
@@ -225,13 +339,54 @@ def extrair_frase(texto: str) -> str:
 
 
 def como_json(texto: str) -> dict[str, object] | None:
-    """Tenta ler a resposta como JSON, tolerando cerca de markdown."""
+    """Lê a resposta como JSON, tolerando cerca de markdown e corte no meio."""
     bruto = texto.strip()
     if bruto.startswith("```"):
         bruto = bruto.split("```")[1] if "```" in bruto[3:] else bruto[3:]
         bruto = bruto.removeprefix("json").strip()
+
     try:
         dados = json.loads(bruto)
     except (json.JSONDecodeError, ValueError):
-        return None
+        dados = _remendar(bruto)
+
     return dados if isinstance(dados, dict) else None
+
+
+def _remendar(bruto: str) -> dict[str, Any] | None:
+    """Aproveita um JSON que o modelo não terminou de escrever.
+
+    Acontece quando o teto de tokens corta a resposta no meio de uma lista:
+    o que veio antes está correto e completo, e jogar tudo fora por causa
+    de uma chave que faltou fecha significa perder oito mil tokens já
+    pagos. A tentativa é conservadora — corta no último item inteiro e
+    fecha o que estiver aberto.
+    """
+    for corte in range(len(bruto), 0, -1):
+        if bruto[corte - 1] != "}":
+            continue
+        tentativa = bruto[:corte]
+        # fecha na ordem inversa da abertura, contando o que ficou aberto
+        pendentes = []
+        dentro_de_texto = False
+        escapado = False
+        for caractere in tentativa:
+            if escapado:
+                escapado = False
+                continue
+            if caractere == "\\":
+                escapado = True
+            elif caractere == '"':
+                dentro_de_texto = not dentro_de_texto
+            elif not dentro_de_texto and caractere in "{[":
+                pendentes.append("}" if caractere == "{" else "]")
+            elif not dentro_de_texto and caractere in "}]" and pendentes:
+                pendentes.pop()
+        try:
+            dados = json.loads(tentativa + "".join(reversed(pendentes)))
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(dados, dict):
+            logger.info("a resposta do modelo veio cortada; aproveitei a parte completa")
+            return dados
+    return None

@@ -227,6 +227,11 @@ async def detalhar(contexto: Contexto, numero: str) -> Detalhe | None:
                 "confiabilidade": salva.confiabilidade,
                 "modelo": salva.modelo,
                 "tokens": salva.tokens,
+                # A coluna existia e era gravada; a leitura tinha esquecido
+                # dela, e a tela mostrava "0 caracteres lidos" para um
+                # edital de 130 mil — número errado é pior que número
+                # nenhum, porque parece diagnóstico.
+                "caracteres_lidos": salva.caracteres_lidos,
             },
             salva.documentos,
         )

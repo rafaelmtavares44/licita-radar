@@ -28,6 +28,7 @@ class AnaliseSalva:
     confiabilidade: float
     modelo: str | None
     tokens: int
+    caracteres_lidos: int = 0
 
 
 class AnaliseRepo:
@@ -79,7 +80,7 @@ class AnaliseRepo:
     async def buscar(self, numero_controle: str) -> AnaliseSalva | None:
         sql = """
             SELECT numero_controle_pncp, resumo, afirmacoes, documentos, alertas,
-                   confiabilidade, modelo, tokens
+                   confiabilidade, modelo, tokens, caracteres_lidos
               FROM analise_edital
              WHERE numero_controle_pncp = %(numero)s
         """
@@ -98,12 +99,13 @@ class AnaliseRepo:
             confiabilidade=float(linha["confiabilidade"]),
             modelo=linha["modelo"],
             tokens=int(linha["tokens"]),
+            caracteres_lidos=int(linha["caracteres_lidos"] or 0),
         )
 
     async def listar(self, *, limite: int = 20) -> list[AnaliseSalva]:
         sql = """
             SELECT numero_controle_pncp, resumo, afirmacoes, documentos, alertas,
-                   confiabilidade, modelo, tokens
+                   confiabilidade, modelo, tokens, caracteres_lidos
               FROM analise_edital
              ORDER BY criado_em DESC
              LIMIT %(limite)s
@@ -122,6 +124,7 @@ class AnaliseRepo:
                 confiabilidade=float(linha["confiabilidade"]),
                 modelo=linha["modelo"],
                 tokens=int(linha["tokens"]),
+                caracteres_lidos=int(linha["caracteres_lidos"] or 0),
             )
             for linha in linhas
         ]
