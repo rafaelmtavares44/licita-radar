@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from licita_radar import ciclo
 from licita_radar.api.esquemas import (
     AfirmacaoDTO,
     AnaliseDTO,
@@ -84,6 +85,10 @@ class Contexto:
     analises: Any
     execucoes: Any = None
     trabalhos: Trabalhos = field(default_factory=Trabalhos)
+    atualizacao: ciclo.Atualizacao = field(default_factory=ciclo.Atualizacao)
+    #: A tarefa da atualização em curso. Guardada porque o asyncio só
+    #: mantém referência fraca, e tarefa sem dono pode ser coletada no meio.
+    _tarefa_da_atualizacao: asyncio.Task[None] | None = None
 
     @classmethod
     def de_banco(cls, banco: Banco, grafo: Any, perfil: Perfil) -> Contexto:
@@ -270,6 +275,35 @@ async def detalhar(contexto: Contexto, numero: str) -> Detalhe | None:
         trilha=list(estado.get("trilha") or []),
         tokens_gastos=int(estado.get("tokens_gastos") or 0),
     )
+
+
+# ------------------------------------------------------------- atualização
+
+
+async def atualizar(contexto: Contexto, settings: Any = None) -> ciclo.Progresso:
+    """Dispara o ciclo e volta na hora, como o "aprovar" faz.
+
+    A atualização leva minutos — varredura nacional, embeddings e grafo.
+    Segurar a resposta HTTP até o fim daria um botão que parece travado, e
+    esta base de código já pagou por esse erro três vezes.
+    """
+    if contexto.atualizacao.ocupada:
+        return contexto.atualizacao.progresso
+
+    contexto.atualizacao.registrar(ciclo.Progresso(etapa="coletando"))
+
+    async def _rodar() -> None:
+        final = await ciclo.atualizar(
+            contexto.perfil,
+            settings=settings,
+            aviso=contexto.atualizacao.registrar,
+        )
+        contexto.atualizacao.registrar(final)
+
+    tarefa = asyncio.create_task(_rodar())
+    contexto._tarefa_da_atualizacao = tarefa
+    tarefa.add_done_callback(lambda _: setattr(contexto, "_tarefa_da_atualizacao", None))
+    return contexto.atualizacao.progresso
 
 
 # ----------------------------------------------------------------- decisão

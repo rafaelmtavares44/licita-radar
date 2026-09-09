@@ -135,6 +135,8 @@ Nada roda sozinho: o painel é uma janela sobre o que estes passos produziram.
 licita-radar atualizar        # ingest + match + radar, de uma vez
 ```
 
+O painel tem o mesmo ciclo no botão **Atualizar editais**: ele volta na hora, roda em segundo plano e o próprio botão vira o relatório de progresso — *buscando contratações no PNCP*, *comparando com o seu perfil*, *passando pelo grafo*.
+
 O cabeçalho do painel mostra **quando foi a última coleta** e fica âmbar quando passa de um dia — porque uma tela com dado de quatro dias atrás é indistinguível de uma tela atualizada agora, e quem olha conclui que o PNCP é que parou de publicar.
 
 Para rodar todo dia de manhã, agende o comando no seu sistema. No Windows, pelo **Agendador de Tarefas**; no Linux ou macOS, no `cron`:

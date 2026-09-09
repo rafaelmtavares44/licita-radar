@@ -119,6 +119,16 @@ def criar_app(settings: Settings | None = None, *, servir_painel: bool = True) -
             contexto, limite=limite, so_candidatas=not todas, so_abertas=not encerradas
         )
 
+    @app.post("/api/atualizar", status_code=202)
+    async def disparar_atualizacao(contexto: Ctx) -> dict[str, Any]:
+        """Volta na hora; o ciclo corre em segundo plano."""
+        progresso = await servico.atualizar(contexto, settings=s)
+        return progresso.como_dict()
+
+    @app.get("/api/atualizar")
+    async def estado_da_atualizacao(contexto: Ctx) -> dict[str, Any]:
+        return contexto.atualizacao.progresso.como_dict()
+
     @app.get("/api/candidatas/{chave}", response_model=Detalhe)
     async def detalhe(contexto: Ctx, chave: str) -> Detalhe:
         achado = await servico.detalhar(contexto, numero_de(chave))

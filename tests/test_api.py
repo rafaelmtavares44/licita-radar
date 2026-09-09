@@ -386,3 +386,62 @@ class TestQuandoOPainelNaoFoiConstruido:
 
         assert inexistente.status_code == 404
         assert outra.status_code == 404
+
+
+class TestBotaoDeAtualizar:
+    """Atualizar leva minutos: o botão volta na hora e vira relatório."""
+
+    @pytest.fixture
+    def cliente_lento(self, contexto: Contexto, monkeypatch: pytest.MonkeyPatch) -> Any:
+        from licita_radar import ciclo
+
+        async def _demorar(perfil: Any, **kwargs: Any) -> ciclo.Progresso:
+            aviso = kwargs.get("aviso")
+            for etapa in ("coletando", "pontuando", "avaliando"):
+                if aviso:
+                    aviso(ciclo.Progresso(etapa=etapa))  # type: ignore[arg-type]
+                await asyncio.sleep(0.03)
+            return ciclo.Progresso(etapa="pronto", coletadas=120, novas=7, aguardando=3)
+
+        monkeypatch.setattr("licita_radar.api.servico.ciclo.atualizar", _demorar)
+        app = criar_app(servir_painel=False)
+        app.dependency_overrides[obter_contexto] = lambda: contexto
+        return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://teste")
+
+    @pytest.mark.asyncio
+    async def test_volta_na_hora_e_termina_depois(self, cliente_lento: Any) -> None:
+        async with cliente_lento as http:
+            disparo = await http.post("/api/atualizar")
+            assert disparo.status_code == 202
+            assert disparo.json()["em_andamento"] is True
+
+            # a tela pergunta em que etapa está
+            await asyncio.sleep(0.04)
+            meio = (await http.get("/api/atualizar")).json()
+            assert meio["etapa"] in ("coletando", "pontuando", "avaliando")
+
+            await asyncio.sleep(0.2)
+            final = (await http.get("/api/atualizar")).json()
+
+        assert final["etapa"] == "pronto"
+        assert final["novas"] == 7
+        assert final["aguardando"] == 3
+
+    @pytest.mark.asyncio
+    async def test_dois_cliques_nao_rodam_duas_vezes(self, cliente_lento: Any) -> None:
+        """O ciclo varre o PNCP inteiro — duplicá-lo é dobrar a espera."""
+        async with cliente_lento as http:
+            primeiro = await http.post("/api/atualizar")
+            segundo = await http.post("/api/atualizar")
+            await asyncio.sleep(0.25)
+
+        assert primeiro.json()["em_andamento"] is True
+        assert segundo.json()["em_andamento"] is True
+
+    @pytest.mark.asyncio
+    async def test_antes_de_qualquer_pedido_o_estado_e_parado(self, cliente: Any) -> None:
+        async with cliente as http:
+            estado = (await http.get("/api/atualizar")).json()
+
+        assert estado["etapa"] == "parado"
+        assert estado["em_andamento"] is False

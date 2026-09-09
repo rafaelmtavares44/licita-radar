@@ -59,6 +59,18 @@ export interface ResumoFunil {
   encerradas_escondidas: number;
 }
 
+export interface Atualizacao {
+  etapa: "parado" | "coletando" | "pontuando" | "avaliando" | "pronto" | "erro";
+  mensagem: string;
+  em_andamento: boolean;
+  coletadas: number;
+  novas: number;
+  avaliadas: number;
+  candidatas: number;
+  aguardando: number;
+  erro: string | null;
+}
+
 export interface EstadoDoTrabalho {
   chave: string;
   estado: "analisando" | "pronta" | "erro" | "desconhecido";

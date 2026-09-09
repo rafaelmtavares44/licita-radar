@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ErroDaApi, api, desdeQuando } from "./api";
 import { PainelDeDetalhe } from "./componentes/Detalhe";
 import { Lista } from "./componentes/Lista";
-import type { Detalhe, ItemLista, ResumoFunil } from "./tipos";
+import type { Atualizacao, Detalhe, ItemLista, ResumoFunil } from "./tipos";
 
 /** De quanto em quanto tempo perguntar se o edital já foi lido. */
 const INTERVALO_DA_ESPERA = 2000;
@@ -40,6 +40,31 @@ function Medidores({ resumo }: { resumo: ResumoFunil }) {
 }
 
 
+/** O botão que dispara o ciclo, e vira relatório de progresso enquanto roda. */
+function BotaoDeAtualizar({
+  estado,
+  aoClicar,
+}: {
+  estado: Atualizacao | null;
+  aoClicar: () => void;
+}) {
+  const rodando = estado?.em_andamento ?? false;
+
+  return (
+    <button className="atualizar" onClick={aoClicar} disabled={rodando}>
+      {rodando ? (
+        <>
+          <span className="girando" aria-hidden="true" />
+          {estado?.mensagem}
+        </>
+      ) : (
+        "Atualizar editais"
+      )}
+    </button>
+  );
+}
+
+
 export default function App() {
   const [resumo, setResumo] = useState<ResumoFunil | null>(null);
   const [itens, setItens] = useState<ItemLista[]>([]);
@@ -47,6 +72,7 @@ export default function App() {
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
   const [analisando, setAnalisando] = useState(false);
   const [comEncerradas, setComEncerradas] = useState(false);
+  const [atualizacao, setAtualizacao] = useState<Atualizacao | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
 
@@ -128,6 +154,33 @@ export default function App() {
     if (relogio.current) window.clearInterval(relogio.current);
   }, []);
 
+  // A atualização leva minutos e roda no servidor: quem pergunta "já?" é a
+  // tela. O intervalo é maior que o da análise porque as etapas são longas
+  // — perguntar de dois em dois segundos só geraria tráfego.
+  const acompanharAtualizacao = useCallback(() => {
+    const relogio = window.setInterval(async () => {
+      try {
+        const estado = await api.estadoDaAtualizacao();
+        setAtualizacao(estado);
+        if (!estado.em_andamento) {
+          window.clearInterval(relogio);
+          void carregar();
+        }
+      } catch {
+        window.clearInterval(relogio);
+      }
+    }, 3000);
+  }, [carregar]);
+
+  async function atualizarAgora() {
+    try {
+      setAtualizacao(await api.atualizar());
+      acompanharAtualizacao();
+    } catch (erro) {
+      setFalha(erro instanceof ErroDaApi ? erro.message : String(erro));
+    }
+  }
+
   async function decidir(decisao: "aprovar" | "rejeitar", comentario: string) {
     if (!selecionada) return;
     try {
@@ -150,7 +203,15 @@ export default function App() {
           licita<span>·</span>radar
         </div>
         {resumo && <Medidores resumo={resumo} />}
+        <BotaoDeAtualizar estado={atualizacao} aoClicar={atualizarAgora} />
       </header>
+
+      {atualizacao?.etapa === "pronto" && (
+        <p className="aviso-topo">
+          {atualizacao.novas} novas de {atualizacao.coletadas} coletadas ·{" "}
+          {atualizacao.aguardando} esperando a sua decisão
+        </p>
+      )}
 
       {falha && <p className="falha">{falha}</p>}
 

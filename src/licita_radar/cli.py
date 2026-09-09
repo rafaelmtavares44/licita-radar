@@ -16,7 +16,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from licita_radar import plataforma
+from licita_radar import ciclo, plataforma
 from licita_radar.alerta import construir_canal, mensagem_de_triagem
 from licita_radar.alerta.canal import ErroDoTelegram, Telegram
 from licita_radar.analise.analista import ASSUNTOS, ROTULOS, analisar_edital
@@ -684,24 +684,34 @@ def cmd_atualizar(
     """Coleta, pontua e passa pelo grafo — o ciclo inteiro, de uma vez.
 
     Existe porque o painel é uma janela sobre o que estes três passos
-    produziram, e nada os executa sozinho. Sem um comando único, "atualizar
-    o radar" eram três comandos na ordem certa — e a tela continuava
-    mostrando o resultado de dias atrás sem avisar que era de dias atrás.
-
-    É este o comando para agendar.
+    produziram, e nada os executa sozinho. É este o comando para agendar,
+    e é o mesmo que o botão "atualizar" da tela dispara.
     """
     _configurar_log()
-    caminho = caminho_perfil or get_settings().perfil_path
-    perfil = _carregar_ou_sair(caminho)
+    perfil = _carregar_ou_sair(caminho_perfil or get_settings().perfil_path)
+    opcoes = ciclo.Opcoes(brasil=brasil, ate_dias=ate, limite_do_grafo=limite)
 
-    console.print(f"[bold]1/3[/bold] coletando do PNCP · prazo até {ate} dias à frente")
-    cmd_ingest(brasil=brasil, ate=ate, caminho_perfil=caminho)
+    etapas = {"coletando": "1/3", "pontuando": "2/3", "avaliando": "3/3"}
 
-    console.print(f"\n[bold]2/3[/bold] pontuando contra o perfil [bold]{perfil.nome}[/bold]")
-    cmd_match(limite=limite, caminho_perfil=caminho)
+    def contar(progresso: ciclo.Progresso) -> None:
+        if rotulo := etapas.get(progresso.etapa):
+            console.print(f"[bold]{rotulo}[/bold] {progresso.mensagem}")
 
-    console.print("\n[bold]3/3[/bold] passando pelo grafo")
-    cmd_radar(limite=limite, caminho_perfil=caminho)
+    final = _rodar(ciclo.atualizar(perfil, opcoes=opcoes, aviso=contar))
+
+    if final.erro:
+        console.print(f"\n[bold red]{escape(final.erro)}[/bold red]")
+        raise typer.Exit(code=1)
+
+    console.print(
+        f"\n[green]{final.novas}[/green] novas de {final.coletadas} coletadas · "
+        f"{final.candidatas} candidatas de {final.avaliadas} avaliadas"
+    )
+    if final.aguardando:
+        console.print(
+            f"[bold green]{final.aguardando}[/bold green] esperando a sua decisão — "
+            f"abra o painel ou rode [bold]licita-radar revisar[/bold]"
+        )
 
 
 @app.command("alertar")

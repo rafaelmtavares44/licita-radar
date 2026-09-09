@@ -1,4 +1,4 @@
-import type { Detalhe, EstadoDoTrabalho, ItemLista, ResumoFunil } from "./tipos";
+import type { Atualizacao, Detalhe, EstadoDoTrabalho, ItemLista, ResumoFunil } from "./tipos";
 
 /** Erro que já sabe se explicar — a tela mostra a mensagem, não o objeto. */
 export class ErroDaApi extends Error {
@@ -43,6 +43,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ decisao, comentario: comentario || null }),
     }),
+
+  atualizar: () => pedir<Atualizacao>("/api/atualizar", { method: "POST" }),
+
+  estadoDaAtualizacao: () => pedir<Atualizacao>("/api/atualizar"),
 
   estadoDaDecisao: (chave: string) =>
     pedir<EstadoDoTrabalho>(`/api/candidatas/${chave}/decisao`),

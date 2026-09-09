@@ -661,3 +661,46 @@ button {
 .medidor.coleta.vencida small {
   color: var(--duvida);
 }
+
+/* -------------------------------------------- o botão de atualizar */
+
+.atualizar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: 22px;
+  padding: 9px 15px;
+  border: 1px solid var(--cobalto);
+  border-radius: 8px;
+  background: var(--cobalto);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .atualizar {
+    color: #0f131b;
+  }
+}
+
+/* Enquanto roda, o botão para de ser botão e vira relatório: o texto diz
+   em que etapa está, e o giro diz que ainda está viva. */
+.atualizar:disabled {
+  background: transparent;
+  border-color: var(--borda-forte);
+  color: var(--tinta-media);
+  cursor: progress;
+  font-weight: 500;
+}
+
+.aviso-topo {
+  margin: 0;
+  padding: 9px 22px;
+  border-bottom: 1px solid var(--borda);
+  background: var(--sustentada-fundo);
+  color: var(--sustentada);
+  font-size: 13px;
+  font-weight: 500;
+}
