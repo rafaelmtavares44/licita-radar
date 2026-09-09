@@ -290,6 +290,7 @@ async def atualizar(contexto: Contexto, settings: Any = None) -> ciclo.Progresso
     if contexto.atualizacao.ocupada:
         return contexto.atualizacao.progresso
 
+    contexto.atualizacao.registrar(ciclo.Progresso(etapa="parado"))
     contexto.atualizacao.registrar(ciclo.Progresso(etapa="coletando"))
 
     async def _rodar() -> None:

@@ -62,6 +62,7 @@ export interface ResumoFunil {
 export interface Atualizacao {
   etapa: "parado" | "coletando" | "pontuando" | "avaliando" | "pronto" | "erro";
   mensagem: string;
+  segundos: number;
   em_andamento: boolean;
   coletadas: number;
   novas: number;

@@ -439,6 +439,17 @@ class TestBotaoDeAtualizar:
         assert segundo.json()["em_andamento"] is True
 
     @pytest.mark.asyncio
+    async def test_o_relogio_conta_o_ciclo_e_nao_a_etapa(self, cliente_lento: Any) -> None:
+        """Contador que zera a cada fase nunca mostra que já se esperou muito."""
+        async with cliente_lento as http:
+            await http.post("/api/atualizar")
+            await asyncio.sleep(0.12)
+            meio = (await http.get("/api/atualizar")).json()
+
+        assert "segundos" in meio
+        assert meio["segundos"] >= 0
+
+    @pytest.mark.asyncio
     async def test_antes_de_qualquer_pedido_o_estado_e_parado(self, cliente: Any) -> None:
         async with cliente as http:
             estado = (await http.get("/api/atualizar")).json()

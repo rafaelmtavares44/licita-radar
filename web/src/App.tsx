@@ -40,6 +40,12 @@ function Medidores({ resumo }: { resumo: ResumoFunil }) {
 }
 
 
+function duracao(segundos: number): string {
+  if (segundos < 60) return `${segundos}s`;
+  const minutos = Math.floor(segundos / 60);
+  return `${minutos}min ${segundos % 60}s`;
+}
+
 /** O botão que dispara o ciclo, e vira relatório de progresso enquanto roda. */
 function BotaoDeAtualizar({
   estado,
@@ -55,7 +61,13 @@ function BotaoDeAtualizar({
       {rodando ? (
         <>
           <span className="girando" aria-hidden="true" />
-          {estado?.mensagem}
+          <span>
+            {estado?.mensagem}
+            {/* O relógio é o que separa "demorando" de "travado". A
+                varredura nacional leva minutos, e sem ele a pessoa
+                desiste antes de a primeira etapa terminar. */}
+            <em>{duracao(estado?.segundos ?? 0)}</em>
+          </span>
         </>
       ) : (
         "Atualizar editais"

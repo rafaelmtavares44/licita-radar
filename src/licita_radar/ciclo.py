@@ -18,7 +18,9 @@ de código já aprendeu três vezes.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -55,6 +57,10 @@ class Progresso:
     """O estado da atualização, do jeito que a tela precisa mostrar."""
 
     etapa: Etapa = "parado"
+    #: Relógio monotônico do início, para a tela poder mostrar há quanto
+    #: tempo isto está rodando. Uma etapa que demora minutos sem dizer
+    #: quanto já passou é indistinguível de uma etapa travada.
+    inicio: float = field(default_factory=time.monotonic)
     coletadas: int = 0
     novas: int = 0
     avaliadas: int = 0
@@ -70,10 +76,15 @@ class Progresso:
     def em_andamento(self) -> bool:
         return self.etapa in ("coletando", "pontuando", "avaliando")
 
+    @property
+    def segundos(self) -> int:
+        return int(time.monotonic() - self.inicio)
+
     def como_dict(self) -> dict[str, Any]:
         return {
             "etapa": self.etapa,
             "mensagem": self.mensagem,
+            "segundos": self.segundos,
             "em_andamento": self.em_andamento,
             "coletadas": self.coletadas,
             "novas": self.novas,
@@ -162,7 +173,13 @@ async def pontuar(
 
         scores: dict[str, float] = {}
         if o.com_semantica:
-            motor = MotorSemantico(FastEmbedEncoder())
+            # Carregar o modelo e gerar embeddings é cálculo puro e
+            # síncrono. No terminal isso só deixava o comando lento; num
+            # servidor, trava o event loop inteiro — inclusive as respostas
+            # que a tela usa para saber que a atualização ainda está viva.
+            # A tela congela e parece travamento, que é exatamente o que
+            # não pode acontecer numa etapa de minutos.
+            motor = await asyncio.to_thread(lambda: MotorSemantico(FastEmbedEncoder()))
             embeddings = EmbeddingRepo(banco)
             # A pergunta é feita sobre exatamente as que serão avaliadas:
             # sem esse recorte, "quais faltam?" devolvia outro conjunto e
@@ -175,12 +192,11 @@ async def pontuar(
             )
             a_codificar = [c for c in contratacoes if c.numero_controle_pncp in pendentes]
             if a_codificar:
-                await embeddings.salvar_muitos(
-                    motor.codificar_contratacoes(a_codificar), modelo=motor.encoder.nome
-                )
+                codificados = await asyncio.to_thread(motor.codificar_contratacoes, a_codificar)
+                await embeddings.salvar_muitos(codificados, modelo=motor.encoder.nome)
 
             vetores = await matching.vetores([c.numero_controle_pncp for c in contratacoes])
-            vetor_perfil = motor.vetor_do_perfil(perfil)
+            vetor_perfil = await asyncio.to_thread(motor.vetor_do_perfil, perfil)
             scores = {
                 numero: similaridade_cosseno(vetor_perfil, vetor)
                 for numero, vetor in vetores.items()
@@ -238,6 +254,8 @@ async def atualizar(
 
     def anunciar(etapa: Etapa) -> None:
         progresso.etapa = etapa
+        # o relógio é do ciclo inteiro, não da etapa: quem espera quer
+        # saber há quanto tempo clicou, não há quanto tempo mudou de fase
         logger.info("atualização: %s", progresso.mensagem)
         if aviso:
             aviso(progresso)
@@ -276,6 +294,11 @@ class Atualizacao:
     progresso: Progresso = field(default_factory=Progresso)
 
     def registrar(self, novo: Progresso) -> None:
+        # O relógio é do ciclo, não do objeto: cada etapa nova herda o
+        # início da anterior, senão o contador zera a cada fase e a pessoa
+        # nunca vê que já esperou quatro minutos.
+        if self.progresso.em_andamento:
+            novo.inicio = self.progresso.inicio
         self.progresso = novo
 
     @property
