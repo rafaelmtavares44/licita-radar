@@ -68,8 +68,8 @@ export interface ResumoFunil {
   novas_na_ultima: number;
   encerradas_escondidas: number;
   escopo: Escopo;
-  /** As UFs com candidata aberta agora — o que popula o seletor. */
-  ufs_com_candidatas: string[];
+  /** Quantas candidatas abertas cada UF tem agora. */
+  candidatas_por_uf: Record<string, number>;
 }
 
 export interface Atualizacao {
@@ -105,3 +105,17 @@ export const ROTULOS: Record<string, string> = {
 };
 
 export const ORDEM_DOS_ASSUNTOS = Object.keys(ROTULOS);
+
+/** As 27 unidades da federação, na ordem alfabética das siglas.
+ *
+ * A lista é fixa porque o seletor não escolhe só o que exibir: escolhe
+ * onde a próxima coleta vai buscar. Oferecer apenas os estados que já
+ * têm resultado trancaria a porta pelo lado de dentro — para o Rio
+ * Grande do Sul aparecer, seria preciso primeiro coletar o Rio Grande
+ * do Sul.
+ */
+export const UFS = [
+  "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO",
+  "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR",
+  "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
+] as const;

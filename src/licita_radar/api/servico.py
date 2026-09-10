@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -230,10 +231,7 @@ async def resumo(contexto: Contexto) -> ResumoFunil:
         novas_na_ultima=int(ultima.get("total_novas") or 0) if ultima else 0,
         encerradas_escondidas=max(0, len(todas) - len(abertas)),
         escopo=_escopo(contexto.perfil),
-        # As UFs vêm do que existe na lista, não da tabela de siglas: um
-        # seletor com 27 opções das quais 22 não filtram nada é um seletor
-        # que mente sobre o acervo.
-        ufs_com_candidatas=sorted({str(x["uf"]) for x in abertas if x.get("uf")}),
+        candidatas_por_uf=Counter(str(x["uf"]) for x in abertas if x.get("uf")),
     )
 
 

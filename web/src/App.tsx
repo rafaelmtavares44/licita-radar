@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ErroDaApi, api, desdeQuando } from "./api";
 import { PainelDeDetalhe } from "./componentes/Detalhe";
 import { Lista } from "./componentes/Lista";
+import { UFS } from "./tipos";
 import type { Atualizacao, Detalhe, Escopo, ItemLista, ResumoFunil } from "./tipos";
 
 /** O que este radar procura, embaixo do nome.
@@ -25,26 +26,46 @@ function Recorte({ escopo }: { escopo: Escopo }) {
   );
 }
 
-/** Onde procurar. Muda a lista e o alvo da próxima coleta. */
+/** Onde procurar. Muda a lista e o alvo da próxima coleta.
+ *
+ * Os 27 estados aparecem sempre. Os que já têm candidata vêm primeiro,
+ * com a contagem, porque é neles que há algo para ver agora — mas os
+ * outros continuam escolhíveis, senão coletar um estado novo exigiria
+ * que ele já tivesse sido coletado.
+ */
 function SeletorDeUf({
-  ufs,
+  contagem,
   atual,
   aoEscolher,
 }: {
-  ufs: string[];
+  contagem: Record<string, number>;
   atual: string | null;
   aoEscolher: (uf: string | null) => void;
 }) {
+  const comResultado = UFS.filter((uf) => (contagem[uf] ?? 0) > 0);
+  const restantes = UFS.filter((uf) => !(contagem[uf] ?? 0));
+
   return (
     <label className="seletor-uf">
       <span className="rotulo">onde</span>
       <select value={atual ?? ""} onChange={(e) => aoEscolher(e.target.value || null)}>
-        <option value="">Brasil</option>
-        {ufs.map((uf) => (
-          <option key={uf} value={uf}>
-            {uf}
-          </option>
-        ))}
+        <option value="">Brasil inteiro</option>
+        {comResultado.length > 0 && (
+          <optgroup label="com candidatas abertas">
+            {comResultado.map((uf) => (
+              <option key={uf} value={uf}>
+                {uf} ({contagem[uf]})
+              </option>
+            ))}
+          </optgroup>
+        )}
+        <optgroup label={comResultado.length > 0 ? "demais estados" : "estados"}>
+          {restantes.map((uf) => (
+            <option key={uf} value={uf}>
+              {uf}
+            </option>
+          ))}
+        </optgroup>
       </select>
     </label>
   );
@@ -276,7 +297,7 @@ export default function App() {
         </div>
         {resumo && <Medidores resumo={resumo} />}
         {resumo && (
-          <SeletorDeUf ufs={resumo.ufs_com_candidatas} atual={uf} aoEscolher={setUf} />
+          <SeletorDeUf contagem={resumo.candidatas_por_uf} atual={uf} aoEscolher={setUf} />
         )}
         <BotaoDeAtualizar estado={atualizacao} aoClicar={atualizarAgora} />
       </header>

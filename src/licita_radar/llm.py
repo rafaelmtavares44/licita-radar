@@ -22,8 +22,11 @@ import asyncio
 import json
 import logging
 import re
+import time
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, ClassVar, Protocol, runtime_checkable
 
 import httpx
 
@@ -37,7 +40,49 @@ _STATUS_RETENTAVEIS = frozenset({429, 500, 502, 503, 504})
 #: de edital gasta uns 8 mil tokens, e três seguidas estouram o limite por
 #: minuto de qualquer plano gratuito. Sem espera, o alerta some e a pessoa
 #: vê "o modelo falhou" sem saber que bastava aguardar vinte segundos.
-_TENTATIVAS = 4
+_TENTATIVAS = 5
+
+
+class _Vez:
+    """A fila de quem fala com o provedor, e o tempo que ele pediu.
+
+    O retry por chamada não bastava, e o motivo é que ele trata cada
+    chamada como se estivesse sozinha. Duas análises aprovadas em
+    sequência disparam ao mesmo tempo, tomam 429 juntas, esperam o mesmo
+    tanto e voltam juntas — colidindo de novo, indefinidamente. A cota é
+    da conta, não da chamada: enquanto elas não forem postas em fila, o
+    "aguarde e tente de novo" só sincroniza as duas.
+
+    Guardar o tempo pedido também importa. Quando o provedor diz "tente
+    em 19s", esse 19 vale para a *próxima* chamada também — descobrir
+    isso levando outro 429 é pagar duas vezes pela mesma informação.
+    """
+
+    #: Uma fila por event loop. O Lock se prende ao loop no primeiro
+    #: await, e a suíte de testes roda um loop por teste.
+    _por_loop: ClassVar[dict[object, tuple[asyncio.Lock, list[float]]]] = {}
+
+    @classmethod
+    def _estado(cls) -> tuple[asyncio.Lock, list[float]]:
+        loop = asyncio.get_running_loop()
+        if loop not in cls._por_loop:
+            cls._por_loop[loop] = (asyncio.Lock(), [0.0])
+        return cls._por_loop[loop]
+
+    @classmethod
+    @asynccontextmanager
+    async def esperar(cls) -> AsyncIterator[Callable[[float], None]]:
+        trava, liberado_em = cls._estado()
+        async with trava:
+            atraso = liberado_em[0] - time.monotonic()
+            if atraso > 0:
+                logger.info("o provedor ainda está de castigo; aguardando %.0fs", atraso)
+                await asyncio.sleep(atraso)
+
+            def adiar(segundos: float) -> None:
+                liberado_em[0] = time.monotonic() + segundos
+
+            yield adiar
 
 
 #: Modelos que raciocinam antes de responder. O nome é o único sinal
@@ -233,7 +278,9 @@ class LLMCompativelOpenAI:
         rota = f"{self._base_url}/chat/completions"
         ultima: Exception | None = None
 
-        async with httpx.AsyncClient(timeout=self._timeout) as cliente:
+        # Uma chamada por vez, para a conta inteira. Duas análises em
+        # paralelo não são duas vezes mais rápidas: são dois 429.
+        async with _Vez.esperar() as adiar, httpx.AsyncClient(timeout=self._timeout) as cliente:
             for tentativa in range(1, _TENTATIVAS + 1):
                 try:
                     resposta = await cliente.post(rota, headers=cabecalhos, json=corpo)
@@ -249,10 +296,14 @@ class LLMCompativelOpenAI:
                     dados: dict[str, Any] = resposta.json()
                     return dados
 
+                espera = espera_pedida(resposta) or float(2**tentativa)
+                # Quem vier depois herda a espera, mesmo que esta chamada
+                # desista: o castigo é da conta, não desta requisição.
+                adiar(espera)
+
                 if tentativa == _TENTATIVAS:
                     resposta.raise_for_status()
 
-                espera = espera_pedida(resposta) or float(2**tentativa)
                 logger.info(
                     "o provedor respondeu %s; aguardando %.0fs (tentativa %d de %d)",
                     resposta.status_code,

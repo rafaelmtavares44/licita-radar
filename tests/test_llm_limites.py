@@ -7,11 +7,13 @@ que jogou fora oito mil tokens já pagos.
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import pytest
 import respx
 
-from licita_radar.llm import LLMCompativelOpenAI, como_json, espera_pedida
+from licita_radar.llm import _TENTATIVAS, LLMCompativelOpenAI, como_json, espera_pedida
 
 BASE = "https://api.exemplo.test/v1"
 ROTA = f"{BASE}/chat/completions"
@@ -88,7 +90,8 @@ class TestLimiteDeRequisicoes:
         with pytest.raises(httpx.HTTPStatusError):
             await _llm().responder(sistema="s", usuario="u")
 
-        assert rota.call_count == 4
+        # o número exato é detalhe de ajuste; o que importa é que ele para
+        assert rota.call_count == _TENTATIVAS
 
 
 class TestFormatoJson:
@@ -139,3 +142,66 @@ class TestJsonCortado:
 
     def test_cerca_de_markdown_continua_tolerada(self) -> None:
         assert como_json('```json\n{"resumo":"x"}\n```') == {"resumo": "x"}
+
+
+@respx.mock
+async def test_duas_analises_nao_disputam_a_mesma_cota(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Retry por chamada não resolve colisão — só sincroniza os colididos.
+
+    Duas análises aprovadas em sequência disparavam juntas, tomavam 429
+    juntas, esperavam o mesmo tanto e voltavam juntas. Em fila, a segunda
+    sai depois que a primeira terminou, e o 429 não acontece.
+    """
+    simultaneas = 0
+    pico = 0
+
+    def responder(pedido: httpx.Request) -> httpx.Response:
+        nonlocal simultaneas, pico
+        simultaneas += 1
+        pico = max(pico, simultaneas)
+        simultaneas -= 1
+        return _ok()
+
+    respx.post(ROTA).mock(side_effect=responder)
+
+    async def sem_dormir(_: float) -> None:
+        return None
+
+    monkeypatch.setattr("licita_radar.llm.asyncio.sleep", sem_dormir)
+
+    llm = _llm()
+    await asyncio.gather(*(llm.responder(sistema="s", usuario=f"u{i}") for i in range(4)))
+
+    assert pico == 1
+
+
+@respx.mock
+async def test_o_castigo_do_429_vale_para_quem_vem_depois(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ "Tente em 19s" é informação sobre a conta, não sobre a requisição.
+
+    Sem guardar isso, a chamada seguinte descobre o mesmo limite levando
+    outro 429 — pagando duas vezes pela mesma informação.
+    """
+    esperas: list[float] = []
+
+    async def anotar(segundos: float) -> None:
+        esperas.append(segundos)
+
+    monkeypatch.setattr("licita_radar.llm.asyncio.sleep", anotar)
+
+    rota = respx.post(ROTA)
+    rota.side_effect = [
+        httpx.Response(429, json={"error": {"message": "Please try again in 19.153s"}}),
+        _ok(),
+        _ok(),
+    ]
+
+    llm = _llm()
+    await llm.responder(sistema="s", usuario="primeira")
+    await llm.responder(sistema="s", usuario="segunda")
+
+    # a espera do 429 e, na chamada seguinte, o resto do castigo
+    assert len(esperas) >= 2
+    assert esperas[0] == pytest.approx(20.153, abs=0.01)

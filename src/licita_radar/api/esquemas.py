@@ -65,9 +65,13 @@ class ResumoFunil(BaseModel):
     novas_na_ultima: int = 0
     encerradas_escondidas: int = 0
     escopo: Escopo = Field(default_factory=Escopo)
-    #: As UFs que de fato têm candidata aberta agora — o que popula o
-    #: seletor da tela.
-    ufs_com_candidatas: list[str] = Field(default_factory=list)
+    #: Quantas candidatas abertas cada UF tem agora. Serve para o
+    #: seletor destacar onde há o que olhar — mas não para decidir quais
+    #: estados ele oferece: escolher uma UF também escolhe onde coletar
+    #: da próxima vez, e um estado que nunca foi coletado tem zero
+    #: candidatas por definição. Oferecer só os que já têm resultado
+    #: seria trancar a porta pelo lado de dentro.
+    candidatas_por_uf: dict[str, int] = Field(default_factory=dict)
 
 
 class ItemLista(BaseModel):
