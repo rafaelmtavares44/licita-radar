@@ -113,7 +113,12 @@ class PNCPClient:
         settings: Settings | None = None,
         cliente: httpx.AsyncClient | None = None,
         freio: Freio | None = None,
+        ao_paginar: Callable[[int, int], None] | None = None,
     ):
+        #: Avisado a cada página que chega — (número, total). Quem varre o
+        #: Brasil inteiro precisa mostrar que está andando dentro da
+        #: modalidade, não só entre elas.
+        self._ao_paginar = ao_paginar
         self._s = settings or get_settings()
         self._cliente = cliente or httpx.AsyncClient(
             base_url=self._s.pncp_base_url,
@@ -211,6 +216,8 @@ class PNCPClient:
                 pagina.total_paginas,
                 len(pagina.data),
             )
+            if self._ao_paginar:
+                self._ao_paginar(pagina.numero_pagina, pagina.total_paginas)
             yield pagina
 
             if not pagina.tem_proxima or not pagina.data:
@@ -324,8 +331,24 @@ class Coleta:
         return not self.puladas
 
 
-#: Chamado ao começar cada modalidade: (índice a partir de 1, total, código).
-Andamento = Callable[[int, int, int], None]
+@dataclass(frozen=True)
+class Passo:
+    """Onde a varredura está, com detalhe suficiente para virar frase.
+
+    Só a modalidade não basta: o Pregão Eletrônico nacional passa de
+    trinta páginas, e "1 de 3" parado por dez minutos volta a ser
+    indistinguível de travado — o mesmo problema, um nível abaixo.
+    """
+
+    indice: int
+    total: int
+    modalidade: int
+    pagina: int = 0
+    de_paginas: int = 0
+
+
+#: Chamado ao trocar de modalidade e a cada página que chega.
+Andamento = Callable[[Passo], None]
 
 
 async def coletar(
@@ -355,10 +378,19 @@ async def coletar(
         intervalo_inicial_s=s.pncp_intervalo_min_s, intervalo_maximo_s=s.pncp_intervalo_max_s
     )
 
-    async with PNCPClient(settings, freio=freio) as cliente:
+    # O passo corrente vive fora do laço porque o aviso de página não sabe
+    # em que modalidade está — só o laço sabe.
+    passo = Passo(0, len(modalidades), modalidades[0] if modalidades else 0)
+
+    def paginou(pagina: int, de_paginas: int) -> None:
+        if andamento:
+            andamento(Passo(passo.indice, passo.total, passo.modalidade, pagina, de_paginas))
+
+    async with PNCPClient(settings, freio=freio, ao_paginar=paginou) as cliente:
         for indice, modalidade in enumerate(modalidades, start=1):
+            passo = Passo(indice, len(modalidades), modalidade)
             if andamento:
-                andamento(indice, len(modalidades), modalidade)
+                andamento(passo)
             antes, comeco = len(encontradas), time.monotonic()
             try:
                 if apenas_abertas:

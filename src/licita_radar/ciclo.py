@@ -29,7 +29,7 @@ from typing import Any, Literal
 from licita_radar.config.perfil import Perfil
 from licita_radar.config.settings import Settings, get_settings
 from licita_radar.graph.runner import abrir_radar, processar
-from licita_radar.ingest.pncp_client import coletar, nome_da_modalidade
+from licita_radar.ingest.pncp_client import Passo, coletar, nome_da_modalidade
 from licita_radar.matching.encoder import FastEmbedEncoder, similaridade_cosseno
 from licita_radar.matching.pontuacao import Avaliacao, Veredito, avaliar
 from licita_radar.matching.semantico import MotorSemantico
@@ -133,10 +133,13 @@ async def _coletar(
     hoje = date.today()
     uf_alvo = opcoes.alvo(perfil)
 
-    def andando(indice: int, total: int, modalidade: int) -> None:
+    def andando(passo: Passo) -> None:
         # O objeto de progresso é o mesmo que a tela lê a cada GET, então
         # mutá-lo aqui já basta: não há mudança de etapa para anunciar.
-        progresso.detalhe = f"{nome_da_modalidade(modalidade)} · {indice} de {total}"
+        onde = f"{nome_da_modalidade(passo.modalidade)} · {passo.indice} de {passo.total}"
+        if passo.de_paginas:
+            onde += f" · página {passo.pagina} de {passo.de_paginas}"
+        progresso.detalhe = onde
 
     coleta = await coletar(
         modalidades=perfil.restricoes.modalidades,

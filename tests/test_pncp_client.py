@@ -14,7 +14,7 @@ import pytest
 import respx
 
 from licita_radar.config.settings import Settings
-from licita_radar.ingest.pncp_client import PNCPClient, coletar, descrever
+from licita_radar.ingest.pncp_client import Passo, PNCPClient, coletar, descrever
 
 ROTA_PROPOSTA = "https://pncp.exemplo.test/api/consulta/v1/contratacoes/proposta"
 ROTA_PUBLICACAO = "https://pncp.exemplo.test/api/consulta/v1/contratacoes/publicacao"
@@ -242,19 +242,31 @@ async def test_descrever_sempre_diz_alguma_coisa() -> None:
 
 
 @respx.mock
-async def test_andamento_conta_modalidade_por_modalidade(
-    settings_teste: Settings, pagina2: dict[str, Any]
+async def test_andamento_conta_modalidade_e_pagina(
+    settings_teste: Settings, pagina1: dict[str, Any], pagina2: dict[str, Any]
 ) -> None:
     """Nove minutos na mesma frase é indistinguível de travado."""
-    respx.get(ROTA_PROPOSTA).mock(return_value=httpx.Response(200, json=pagina2))
-    passos: list[tuple[int, int, int]] = []
+
+    def responder(pedido: httpx.Request) -> httpx.Response:
+        pagina = pedido.url.params["pagina"]
+        return httpx.Response(200, json=pagina1 if pagina == "1" else pagina2)
+
+    respx.get(ROTA_PROPOSTA).mock(side_effect=responder)
+    passos: list[Passo] = []
 
     await coletar(
         modalidades=[6, 8],
         data_inicial=date(2026, 9, 1),
         data_final=date(2026, 9, 30),
         settings=settings_teste,
-        andamento=lambda i, total, m: passos.append((i, total, m)),
+        andamento=passos.append,
     )
 
-    assert passos == [(1, 2, 6), (2, 2, 8)]
+    # cada modalidade: o aviso de entrada, e depois um por página
+    assert [(p.indice, p.modalidade, p.pagina) for p in passos[:3]] == [
+        (1, 6, 0),
+        (1, 6, 1),
+        (1, 6, 2),
+    ]
+    assert passos[1].de_paginas > 0  # a tela precisa do denominador
+    assert passos[3].modalidade == 8
