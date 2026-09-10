@@ -125,6 +125,46 @@ button {
   color: var(--cobalto);
 }
 
+/* O cabeçalho alinha pela baseline; a identidade é a única coluna com
+   duas linhas, então ela se alinha por dentro. */
+.identidade {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.recorte {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  max-width: 52ch;
+  color: var(--tinta-fraca);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Só a lista de modalidades encolhe. A etiqueta de abrangência é curta e
+   fica de fora do corte: era ela que o ellipsis comia primeiro. */
+.recorte .modalidades {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A abrangência responde outra pergunta — "onde", não "o quê" — então
+   ganha marca própria em vez de virar mais um item da lista. */
+.recorte .onde {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--cobalto-fraco);
+  color: var(--cobalto);
+  font-weight: 600;
+}
+
 .medidores {
   display: flex;
   gap: 20px;

@@ -17,14 +17,16 @@ from licita_radar.api.esquemas import (
     AfirmacaoDTO,
     AnaliseDTO,
     Detalhe,
+    Escopo,
     EstadoDoTrabalho,
     ItemLista,
     ResumoFunil,
     chave,
 )
-from licita_radar.config.perfil import Perfil
+from licita_radar.config.perfil import ESFERAS, Perfil
 from licita_radar.graph.build import configuracao
 from licita_radar.graph.runner import responder
+from licita_radar.ingest.pncp_client import nome_da_modalidade
 from licita_radar.matching.limpeza import limpar_objeto
 from licita_radar.storage.analise_repo import AnaliseRepo
 from licita_radar.storage.db import Banco
@@ -180,6 +182,20 @@ def _para_analise(bruta: dict[str, Any], documentos: list[dict[str, Any]]) -> An
 # ---------------------------------------------------------------- leituras
 
 
+def _escopo(perfil: Perfil) -> Escopo:
+    """Traduz as restrições do perfil para o que a tela mostra.
+
+    O perfil fala em códigos — `[6, 8, 9]`, `["GO"]`. Ninguém lê o
+    cabeçalho de um painel para descobrir o que é a modalidade 6.
+    """
+    r = perfil.restricoes
+    return Escopo(
+        modalidades=[nome_da_modalidade(m) for m in r.modalidades],
+        ufs=list(r.ufs),
+        esferas=[ESFERAS.get(e.upper(), e) for e in r.esferas],
+    )
+
+
 async def resumo(contexto: Contexto) -> ResumoFunil:
     por_veredito = await contexto.avaliacoes.resumo(perfil_id=contexto.perfil.id)
 
@@ -212,6 +228,7 @@ async def resumo(contexto: Contexto) -> ResumoFunil:
         ultima_coleta=_iso(ultima.get("concluida_em")) if ultima else None,
         novas_na_ultima=int(ultima.get("total_novas") or 0) if ultima else 0,
         encerradas_escondidas=max(0, len(todas) - len(abertas)),
+        escopo=_escopo(contexto.perfil),
     )
 
 

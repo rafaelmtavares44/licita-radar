@@ -27,6 +27,24 @@ class Saude(BaseModel):
     versao: str
 
 
+class Escopo(BaseModel):
+    """O que este radar procura — o recorte que o perfil define.
+
+    Os números do cabeçalho só querem dizer alguma coisa junto com isto:
+    "6 abertas agora" é uma frase incompleta enquanto não se sabe seis
+    abertas *de quê*. E o recorte mora no `perfil.yaml`, longe da tela.
+    """
+
+    modalidades: list[str] = Field(default_factory=list)
+    #: Vazio = Brasil inteiro.
+    ufs: list[str] = Field(default_factory=list)
+    esferas: list[str] = Field(default_factory=list)
+
+    @property
+    def abrangencia(self) -> str:
+        return ", ".join(self.ufs) if self.ufs else "Brasil"
+
+
 class ResumoFunil(BaseModel):
     """Quantas contratações caíram em cada estágio do funil.
 
@@ -43,6 +61,7 @@ class ResumoFunil(BaseModel):
     ultima_coleta: str | None = None
     novas_na_ultima: int = 0
     encerradas_escondidas: int = 0
+    escopo: Escopo = Field(default_factory=Escopo)
 
 
 class ItemLista(BaseModel):

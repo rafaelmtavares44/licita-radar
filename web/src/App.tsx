@@ -2,7 +2,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ErroDaApi, api, desdeQuando } from "./api";
 import { PainelDeDetalhe } from "./componentes/Detalhe";
 import { Lista } from "./componentes/Lista";
-import type { Atualizacao, Detalhe, ItemLista, ResumoFunil } from "./tipos";
+import type { Atualizacao, Detalhe, Escopo, ItemLista, ResumoFunil } from "./tipos";
+
+/** O que este radar procura, embaixo do nome.
+ *
+ * Os números do cabeçalho são incompletos sem isto: "6 abertas agora" não
+ * diz seis abertas de quê. O recorte mora no `perfil.yaml`, longe de quem
+ * está olhando a tela.
+ */
+function Recorte({ escopo }: { escopo: Escopo }) {
+  const onde = escopo.ufs.length > 0 ? escopo.ufs.join(", ") : "Brasil";
+  const partes = [...escopo.modalidades, ...escopo.esferas, onde];
+
+  if (escopo.modalidades.length === 0) return null;
+
+  return (
+    <p className="recorte" title={partes.join(" · ")}>
+      <span className="modalidades">{escopo.modalidades.join(" · ")}</span>
+      <span className="onde">{onde}</span>
+    </p>
+  );
+}
 
 /** De quanto em quanto tempo perguntar se o edital já foi lido. */
 const INTERVALO_DA_ESPERA = 2000;
@@ -211,8 +231,11 @@ export default function App() {
   return (
     <div className="aplicativo">
       <header className="cabecalho">
-        <div className="marca">
-          licita<span>·</span>radar
+        <div className="identidade">
+          <div className="marca">
+            licita<span>·</span>radar
+          </div>
+          {resumo && <Recorte escopo={resumo.escopo} />}
         </div>
         {resumo && <Medidores resumo={resumo} />}
         <BotaoDeAtualizar estado={atualizacao} aoClicar={atualizarAgora} />

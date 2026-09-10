@@ -48,6 +48,14 @@ export interface Detalhe extends ItemLista {
   tokens_gastos: number;
 }
 
+/** O recorte que o perfil define — o que este radar procura. */
+export interface Escopo {
+  modalidades: string[];
+  /** Vazio = Brasil inteiro. */
+  ufs: string[];
+  esferas: string[];
+}
+
 export interface ResumoFunil {
   contratacoes: number;
   avaliadas: number;
@@ -57,6 +65,7 @@ export interface ResumoFunil {
   ultima_coleta: string | null;
   novas_na_ultima: number;
   encerradas_escondidas: number;
+  escopo: Escopo;
 }
 
 export interface Atualizacao {
