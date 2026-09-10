@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 
 from licita_radar.config.perfil import ErroDePerfil, carregar_perfil
 from licita_radar.config.settings import Settings
+from licita_radar.erros import descrever
 
 
 class Estado(StrEnum):
@@ -309,36 +310,57 @@ async def checar_llm(settings: Settings) -> Checagem:
             "opcional: sem LLM, a justificativa é heurística e tudo funciona",
         )
 
+    # Cinco tokens bastavam para um modelo que só escreve. Um modelo de
+    # raciocínio gasta tokens PENSANDO antes de escrever, do mesmo
+    # orçamento — com teto de cinco, ele nunca chega à resposta, e o que
+    # a tela mostra é um timeout que parece problema de rede. O teste de
+    # saúde precisa ter a mesma forma da chamada real, senão ele reprova
+    # configurações que funcionam.
+    from licita_radar.llm import e_de_raciocinio
+
+    orcamento = 512 if e_de_raciocinio(settings.llm_modelo or "") else 32
+
     inicio = time.monotonic()
     try:
         resposta = await llm.responder(
             sistema="Responda apenas com a palavra: ok",
             usuario="Diga ok.",
-            max_tokens=5,
+            max_tokens=orcamento,
         )
     except Exception as erro:  # a mensagem do provedor é a informação útil
-        detalhe = str(erro)
+        # `str()` de um timeout do httpx é string vazia. Sem esta tradução
+        # a linha saía "X gemini-flash-latest" e mais nada — o mesmo erro
+        # mudo que já tinha custado uma busca inteira no cliente do PNCP.
+        detalhe = descrever(erro)
         dica = "confira LR_LLM_API_KEY e LR_LLM_BASE_URL no .env"
-        if "401" in detalhe or "invalid_api_key" in detalhe:
+        if "a tempo" in detalhe or "conectar" in detalhe:
+            dica = (
+                "o provedor não respondeu: confira a URL, a rede, "
+                "e se LR_LLM_TIMEOUT_S não está curto demais"
+            )
+        elif "401" in detalhe or "invalid_api_key" in detalhe:
             dica = "a chave foi recusada — gere outra em console.groq.com"
+        elif "pedidos por dia" in detalhe:
+            dica = "troque LR_LLM_MODELO por outro — a cota é por modelo, não por conta"
         elif "429" in detalhe:
-            dica = "cota diária esgotada; tente amanhã ou troque de modelo"
+            dica = "o provedor pediu para diminuir o ritmo; tente de novo em um minuto"
         elif "404" in detalhe:
             # provedor aposenta modelo com frequência: em vez de mandar a
             # pessoa procurar na documentação, pergunta a ele o que existe
-            from licita_radar.llm import listar_modelos
+            from licita_radar.llm import listar_modelos, provaveis_de_chat
 
-            disponiveis = await listar_modelos(
+            todos = await listar_modelos(
                 base_url=settings.llm_base_url or "", api_key=settings.llm_api_key
             )
+            disponiveis = provaveis_de_chat(todos)
             if disponiveis:
                 amostra = ", ".join(disponiveis[:6])
-                dica = f"'{settings.llm_modelo}' não existe mais. Disponíveis agora: {amostra}" + (
-                    f" (+{len(disponiveis) - 6})" if len(disponiveis) > 6 else ""
+                dica = f"'{settings.llm_modelo}' não existe mais. Tente um destes: {amostra}" + (
+                    f" (+{len(disponiveis) - 6} outros de texto)" if len(disponiveis) > 6 else ""
                 )
             else:
                 dica = f"o modelo '{settings.llm_modelo}' não existe nesse provedor"
-        return Checagem("LLM", settings.llm_modelo or "?", Estado.FALHA, detalhe[:80], dica)
+        return Checagem("LLM", settings.llm_modelo or "?", Estado.FALHA, detalhe[:110], dica)
 
     ms = (time.monotonic() - inicio) * 1000
     return Checagem(

@@ -44,6 +44,7 @@ from tenacity import (
 )
 
 from licita_radar.config.settings import Settings, get_settings
+from licita_radar.erros import descrever
 from licita_radar.ingest.freio import Freio, ler_retry_after
 from licita_radar.ingest.modelos import Contratacao, PaginaPNCP
 from licita_radar.ingest.normalizar import normalizar_pagina
@@ -74,39 +75,6 @@ def _vale_retentar(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _STATUS_RETENTAVEIS
     return isinstance(exc, httpx.TransportError)
-
-
-#: O que dizer para cada falha de transporte. A ordem importa: a primeira
-#: que casar vence, então as classes mais específicas vêm antes.
-_NOMES: tuple[tuple[type[BaseException], str], ...] = (
-    (httpx.ConnectTimeout, "o PNCP não aceitou a conexão a tempo"),
-    (httpx.ReadTimeout, "o PNCP não respondeu a tempo"),
-    (httpx.WriteTimeout, "não deu para enviar o pedido a tempo"),
-    (httpx.PoolTimeout, "a fila de conexões estourou o tempo"),
-    (httpx.ConnectError, "não deu para conectar no PNCP"),
-    (httpx.RemoteProtocolError, "o PNCP encerrou a conexão no meio"),
-    (httpx.ReadError, "a conexão caiu durante a leitura"),
-)
-
-
-def descrever(erro: BaseException) -> str:
-    """Uma frase sobre a falha que nunca sai vazia.
-
-    `str(httpx.ReadTimeout())` é string vazia. O log saía como
-    ``modalidade 6 falhou e foi pulada:`` e terminava ali — indistinguível
-    de uma linha truncada, e sem nenhuma pista do que aconteceu. Um erro
-    sem mensagem custa mais caro que erro nenhum: manda investigar o
-    lugar errado.
-    """
-    if isinstance(erro, httpx.HTTPStatusError):
-        return f"HTTP {erro.response.status_code} em {erro.request.url.path}"
-
-    texto = str(erro).strip()
-    primeira = texto.splitlines()[0] if texto else ""
-    for classe, nome in _NOMES:
-        if isinstance(erro, classe):
-            return f"{nome} ({primeira})" if primeira else nome
-    return primeira or type(erro).__name__
 
 
 def _aaaammdd(dia: date) -> str:

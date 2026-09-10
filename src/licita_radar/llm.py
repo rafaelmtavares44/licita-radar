@@ -87,7 +87,26 @@ class _Vez:
 
 #: Modelos que raciocinam antes de responder. O nome é o único sinal
 #: disponível antes da primeira chamada.
-_MARCAS_DE_RACIOCINIO = ("gpt-oss", "o1", "o3", "o4", "deepseek-r", "qwq", "thinking")
+_MARCAS_DE_RACIOCINIO = (
+    "gpt-oss",
+    "o1",
+    "o3",
+    "o4",
+    "deepseek-r",
+    "qwq",
+    "thinking",
+    # O Gemini Flash pensa por padrão desde a 2.5, e o pensamento sai do
+    # mesmo orçamento da resposta. A camada compatível aceita
+    # `reasoning_effort`; se um dia deixar de aceitar, ela ignora em
+    # silêncio, que é o pior caso tolerável aqui.
+    "gemini-2.5",
+    "gemini-3",
+    # `gemini-flash-latest` é apelido: não diz a versão, mas aponta para
+    # um Flash, e todo Flash desde a 2.5 pensa por padrão.
+    "gemini-flash",
+    "gemini-pro-latest",
+    "gemini-omni",
+)
 
 
 def e_de_raciocinio(modelo: str) -> bool:
@@ -95,8 +114,31 @@ def e_de_raciocinio(modelo: str) -> bool:
     return any(marca in nome for marca in _MARCAS_DE_RACIOCINIO)
 
 
-#: `Retry-After: 20` ou, na Groq, `retry-after: 19.153` no corpo do erro.
-_SEGUNDOS_NO_TEXTO = re.compile(r"try again in ([\d.]+)s", re.IGNORECASE)
+#: O tempo de espera no texto do erro. A Groq escreve "Please try again
+#: in 19.153s"; o Google escreve "Please retry in 20.739736704s". Um
+#: padrão que só conhecia a primeira forma devolvia None para a segunda,
+#: e o código caía no backoff cego tendo a resposta na mão.
+_SEGUNDOS_NO_TEXTO = re.compile(r"(?:try again|retry) in ([\d.]+)s", re.IGNORECASE)
+
+
+def erro_do_corpo(resposta: httpx.Response) -> dict[str, Any]:
+    """O objeto `error` da resposta, venha ele como for.
+
+    O Gemini responde `[{"error": {...}}]` — um array de um elemento —
+    onde a OpenAI responde `{"error": {...}}`. Assumir o dicionário
+    rendeu um `AttributeError` no meio do diagnóstico: o código que
+    existia para explicar a falha falhou primeiro.
+    """
+    try:
+        corpo = resposta.json()
+    except ValueError:
+        return {}
+    if isinstance(corpo, list):
+        corpo = corpo[0] if corpo else {}
+    if not isinstance(corpo, dict):
+        return {}
+    erro = corpo.get("error")
+    return erro if isinstance(erro, dict) else {}
 
 
 def espera_pedida(resposta: httpx.Response) -> float | None:
@@ -113,13 +155,41 @@ def espera_pedida(resposta: httpx.Response) -> float | None:
         except ValueError:
             pass
 
-    try:
-        mensagem = str(resposta.json().get("error", {}).get("message", ""))
-    except ValueError:
-        return None
-
+    mensagem = str(erro_do_corpo(resposta).get("message", ""))
     if achado := _SEGUNDOS_NO_TEXTO.search(mensagem):
         return min(float(achado.group(1)) + 1.0, 120.0)
+    return None
+
+
+class CotaDiariaEsgotada(RuntimeError):
+    """O 429 que esperar não resolve.
+
+    Há dois 429 muito diferentes escondidos no mesmo código. Um diz
+    "devagar" e passa em vinte segundos; o outro diz "volte amanhã".
+    Tratar os dois igual gastava cinco tentativas de vinte segundos —
+    cem segundos — para no fim estourar o prazo e reportar um timeout,
+    escondendo a única informação que importava: o número da cota.
+    """
+
+
+def cota_diaria(resposta: httpx.Response) -> str | None:
+    """Descreve a cota diária estourada, se for esse o caso.
+
+    O Google devolve a resposta em `error.details`, num bloco
+    `QuotaFailure` com `quotaId` e `quotaValue`. O `quotaId` é quem
+    separa os dois casos: quando ele fala em `PerDay`, nenhuma espera
+    razoável resolve.
+    """
+    for detalhe in erro_do_corpo(resposta).get("details", []) or []:
+        if not str(detalhe.get("@type", "")).endswith("QuotaFailure"):
+            continue
+        for violacao in detalhe.get("violations", []) or []:
+            identificador = str(violacao.get("quotaId", ""))
+            if "PerDay" not in identificador:
+                continue
+            valor = violacao.get("quotaValue", "?")
+            modelo = (violacao.get("quotaDimensions") or {}).get("model", "este modelo")
+            return f"a cota gratuita de {modelo} é de {valor} pedidos por dia, e ela acabou"
     return None
 
 
@@ -296,6 +366,12 @@ class LLMCompativelOpenAI:
                     dados: dict[str, Any] = resposta.json()
                     return dados
 
+                if resposta.status_code == httpx.codes.TOO_MANY_REQUESTS and (
+                    diaria := cota_diaria(resposta)
+                ):
+                    # Amanhã, não daqui a vinte segundos.
+                    raise CotaDiariaEsgotada(diaria)
+
                 espera = espera_pedida(resposta) or float(2**tentativa)
                 # Quem vier depois herda a espera, mesmo que esta chamada
                 # desista: o castigo é da conta, não desta requisição.
@@ -353,6 +429,63 @@ async def listar_modelos(
 
     modelos = [str(item.get("id")) for item in dados.get("data", []) if item.get("id")]
     return sorted(modelos)
+
+
+#: O que não serve para conversar: embeddings, imagem, vídeo, áudio,
+#: agentes de uso específico. Alguns provedores devolvem mais deles do
+#: que modelos de texto.
+_NAO_E_CHAT = (
+    "embedding",
+    "imagen",
+    "veo",
+    "tts",
+    "audio",
+    "whisper",
+    "aqa",
+    "guard",
+    "computer-use",
+    "deep-research",
+    "live",
+    "image",
+    "vision",
+    "rerank",
+    "robotics",
+    "coder",
+)
+
+
+def _peso(modelo: str) -> tuple[int, str]:
+    """Quanto este nome parece com o que o projeto precisa.
+
+    Ler edital pede um modelo rápido, barato e de contexto grande — e,
+    de preferência, um apelido estável. O Google acabou de aposentar o
+    `gemini-2.5-flash` e pôs `gemini-flash-latest` no lugar: quem
+    apontar para o apelido não precisa mexer no `.env` na próxima vez.
+    """
+    nome = modelo.lower()
+    pontos = 0
+    if "flash" in nome:
+        pontos += 4
+    if "latest" in nome:
+        pontos += 3
+    if any(marca in nome for marca in ("mini", "instant", "oss", "lite", "turbo")):
+        pontos += 1
+    if "preview" in nome or "exp" in nome:
+        # Preview muda sem aviso, e o que quebra é a análise de alguém.
+        pontos -= 3
+    return (-pontos, nome)
+
+
+def provaveis_de_chat(modelos: list[str]) -> list[str]:
+    """Ordena a lista pelo que provavelmente serve, não pelo alfabeto.
+
+    O 404 vinha com "disponíveis agora:" seguido dos seis primeiros em
+    ordem alfabética — que num provedor grande são `aqa`, embeddings e
+    modelos de robótica. Uma lista assim é pior que nenhuma: parece
+    resposta e manda a pessoa para o lugar errado.
+    """
+    uteis = [m for m in modelos if not any(marca in m.lower() for marca in _NAO_E_CHAT)]
+    return sorted(uteis, key=_peso)
 
 
 # ---------------------------------------------------------------------------
