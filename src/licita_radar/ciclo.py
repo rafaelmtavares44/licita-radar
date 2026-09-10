@@ -139,6 +139,10 @@ async def _coletar(
         onde = f"{nome_da_modalidade(passo.modalidade)} · {passo.indice} de {passo.total}"
         if passo.de_paginas:
             onde += f" · página {passo.pagina} de {passo.de_paginas}"
+        elif passo.pagina:
+            # Sem denominador ainda dá para mostrar que andou. O número que
+            # sobe é o que separa "devagar" de "parado".
+            onde += f" · página {passo.pagina}"
         progresso.detalhe = onde
 
     coleta = await coletar(

@@ -14,6 +14,7 @@ import pytest
 import respx
 
 from licita_radar.config.settings import Settings
+from licita_radar.ingest.modelos import PaginaPNCP
 from licita_radar.ingest.pncp_client import Passo, PNCPClient, coletar, descrever
 
 ROTA_PROPOSTA = "https://pncp.exemplo.test/api/consulta/v1/contratacoes/proposta"
@@ -270,3 +271,21 @@ async def test_andamento_conta_modalidade_e_pagina(
     ]
     assert passos[1].de_paginas > 0  # a tela precisa do denominador
     assert passos[3].modalidade == 8
+
+
+def test_total_de_paginas_cai_para_o_que_a_resposta_tiver() -> None:
+    """Uma barra sem denominador é pior que barra nenhuma.
+
+    A rota de propostas nem sempre manda `totalPaginas`; `paginasRestantes`
+    sempre vem. Sem esta conta, o contador aparecia e sumia.
+    """
+    com_total = PaginaPNCP.de_resposta(
+        {"totalPaginas": 12, "numeroPagina": 3, "paginasRestantes": 9}
+    )
+    assert com_total.total_estimado == 12
+
+    sem_total = PaginaPNCP.de_resposta({"numeroPagina": 3, "paginasRestantes": 9})
+    assert sem_total.total_estimado == 12
+
+    ultima = PaginaPNCP.de_resposta({"numeroPagina": 4, "paginasRestantes": 0})
+    assert ultima.total_estimado == 4

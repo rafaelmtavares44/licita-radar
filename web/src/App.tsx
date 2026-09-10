@@ -199,7 +199,12 @@ export default function App() {
           void carregar();
         }
       } catch {
+        // Parar de perguntar em silêncio deixa o botão girando para
+        // sempre — e um botão que gira é uma promessa de que algo está
+        // acontecendo. Se o servidor caiu, a tela precisa dizer isso.
         window.clearInterval(relogio);
+        setAtualizacao(null);
+        setFalha("perdi contato com o servidor. Recarregue a página para ver como a coleta terminou.");
       }
     }, 3000);
   }, [carregar]);

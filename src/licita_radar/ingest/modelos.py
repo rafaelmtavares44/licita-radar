@@ -77,3 +77,14 @@ class PaginaPNCP(BaseModel):
     @property
     def tem_proxima(self) -> bool:
         return self.paginas_restantes > 0
+
+    @property
+    def total_estimado(self) -> int:
+        """Quantas páginas existem, com o que a resposta oferecer.
+
+        `totalPaginas` nem sempre vem — a rota de propostas às vezes manda
+        só `paginasRestantes`. Uma barra de progresso sem denominador é
+        pior que nenhuma: o contador aparece e some, e quem espera não
+        sabe se é a coleta ou a tela que está com problema.
+        """
+        return self.total_paginas or (self.numero_pagina + self.paginas_restantes)

@@ -217,7 +217,7 @@ class PNCPClient:
                 len(pagina.data),
             )
             if self._ao_paginar:
-                self._ao_paginar(pagina.numero_pagina, pagina.total_paginas)
+                self._ao_paginar(pagina.numero_pagina, pagina.total_estimado)
             yield pagina
 
             if not pagina.tem_proxima or not pagina.data:
