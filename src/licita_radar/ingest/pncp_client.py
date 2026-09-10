@@ -39,6 +39,7 @@ from tenacity import (
     AsyncRetrying,
     retry_if_exception,
     stop_after_attempt,
+    stop_after_delay,
     wait_exponential_jitter,
 )
 
@@ -56,6 +57,13 @@ _STATUS_RETENTAVEIS = frozenset({429, 500, 502, 503, 504})
 #: 429 merece mais paciência que os outros: não é falha, é o servidor
 #: pedindo para diminuir o ritmo.
 _TENTATIVAS_EXTRA_NO_429 = 4
+
+#: Teto de tempo numa única página. Nove tentativas de 60s viraram 457
+#: segundos numa modalidade que nunca ia responder — sete minutos e meio
+#: gastos para descobrir o que os primeiros dois já diziam. Insistir tem
+#: valor quando o servidor está pedindo calma; não tem, quando ele não
+#: está respondendo.
+_SEGUNDOS_NO_MAXIMO_POR_PAGINA = 180.0
 
 
 class ErroPNCP(RuntimeError):
@@ -170,7 +178,8 @@ class PNCPClient:
 
         async with self._semaforo:
             async for tentativa in AsyncRetrying(
-                stop=stop_after_attempt(tentativas),
+                stop=stop_after_attempt(tentativas)
+                | stop_after_delay(_SEGUNDOS_NO_MAXIMO_POR_PAGINA),
                 wait=wait_exponential_jitter(initial=1, max=60),
                 retry=retry_if_exception(_vale_retentar),
                 reraise=True,
@@ -206,9 +215,17 @@ class PNCPClient:
 
     async def _paginar(self, rota: str, params: dict[str, Any]) -> AsyncIterator[PaginaPNCP]:
         pagina_atual = 1
+        total_conhecido = 0
         while True:
+            # O aviso vem ANTES do pedido, não depois. Avisando depois, a
+            # primeira página só aparece quando chega — e enquanto o PNCP
+            # pensa, a tela fica sem nada para mostrar justamente no
+            # momento em que a pessoa mais duvida que algo esteja vivo.
+            if self._ao_paginar:
+                self._ao_paginar(pagina_atual, total_conhecido)
             corpo = await self._get(rota, {**params, "pagina": pagina_atual})
             pagina = PaginaPNCP.de_resposta(corpo)
+            total_conhecido = pagina.total_estimado
             logger.debug(
                 "%s página %d/%d — %d itens",
                 rota,
@@ -216,8 +233,6 @@ class PNCPClient:
                 pagina.total_paginas,
                 len(pagina.data),
             )
-            if self._ao_paginar:
-                self._ao_paginar(pagina.numero_pagina, pagina.total_estimado)
             yield pagina
 
             if not pagina.tem_proxima or not pagina.data:

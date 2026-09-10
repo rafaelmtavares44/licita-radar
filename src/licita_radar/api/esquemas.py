@@ -35,6 +35,9 @@ class Escopo(BaseModel):
     abertas *de quê*. E o recorte mora no `perfil.yaml`, longe da tela.
     """
 
+    #: O assunto, em duas ou três palavras — "TI", "obras". Vem do
+    #: perfil e é a primeira coisa que o cabeçalho diz.
+    foco: str = ""
     modalidades: list[str] = Field(default_factory=list)
     #: Vazio = Brasil inteiro.
     ufs: list[str] = Field(default_factory=list)
@@ -62,6 +65,9 @@ class ResumoFunil(BaseModel):
     novas_na_ultima: int = 0
     encerradas_escondidas: int = 0
     escopo: Escopo = Field(default_factory=Escopo)
+    #: As UFs que de fato têm candidata aberta agora — o que popula o
+    #: seletor da tela.
+    ufs_com_candidatas: list[str] = Field(default_factory=list)
 
 
 class ItemLista(BaseModel):

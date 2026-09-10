@@ -233,6 +233,7 @@ class AvaliacaoRepo:
         limite: int = 20,
         apenas_candidatas: bool = False,
         apenas_abertas: bool = False,
+        uf: str | None = None,
     ) -> list[dict[str, object]]:
         """O ranking do perfil.
 
@@ -240,6 +241,11 @@ class AvaliacaoRepo:
         num radar: ela ocupa a lista, empurra para baixo o que ainda dá
         tempo de disputar, e não há nada a fazer a respeito dela. No
         terminal isso passava; numa tela que fica aberta o dia todo, não.
+
+        `uf` filtra aqui, e não na tela, porque o corte vem antes do
+        `LIMIT`: filtrar depois faria "as 40 melhores do Brasil, das quais
+        as de Goiás" — que não é a mesma lista que "as 40 melhores de
+        Goiás", e é a segunda que a pessoa pediu.
         """
         sql = """
             SELECT a.numero_controle_pncp, a.score_lexical, a.score_semantico, a.score_final,
@@ -253,6 +259,7 @@ class AvaliacaoRepo:
                AND (NOT %(so_abertas)s
                     OR c.encerramento_proposta IS NULL
                     OR c.encerramento_proposta >= now())
+               AND (%(uf)s::text IS NULL OR c.uf = %(uf)s)
              ORDER BY a.score_final DESC, c.encerramento_proposta ASC NULLS LAST
              LIMIT %(limite)s
         """
@@ -266,6 +273,7 @@ class AvaliacaoRepo:
                     "perfil": perfil_id,
                     "so_candidatas": apenas_candidatas,
                     "so_abertas": apenas_abertas,
+                    "uf": uf,
                     "limite": limite,
                 },
             )

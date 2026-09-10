@@ -190,6 +190,7 @@ def _escopo(perfil: Perfil) -> Escopo:
     """
     r = perfil.restricoes
     return Escopo(
+        foco=perfil.foco,
         modalidades=[nome_da_modalidade(m) for m in r.modalidades],
         ufs=list(r.ufs),
         esferas=[ESFERAS.get(e.upper(), e) for e in r.esferas],
@@ -229,6 +230,10 @@ async def resumo(contexto: Contexto) -> ResumoFunil:
         novas_na_ultima=int(ultima.get("total_novas") or 0) if ultima else 0,
         encerradas_escondidas=max(0, len(todas) - len(abertas)),
         escopo=_escopo(contexto.perfil),
+        # As UFs vêm do que existe na lista, não da tabela de siglas: um
+        # seletor com 27 opções das quais 22 não filtram nada é um seletor
+        # que mente sobre o acervo.
+        ufs_com_candidatas=sorted({str(x["uf"]) for x in abertas if x.get("uf")}),
     )
 
 
@@ -238,12 +243,14 @@ async def listar(
     limite: int = 30,
     so_candidatas: bool = True,
     so_abertas: bool = True,
+    uf: str | None = None,
 ) -> list[ItemLista]:
     linhas = await contexto.avaliacoes.ranking(
         perfil_id=contexto.perfil.id,
         limite=limite,
         apenas_candidatas=so_candidatas,
         apenas_abertas=so_abertas,
+        uf=uf,
     )
     itens = []
     for linha in linhas:
@@ -297,7 +304,9 @@ async def detalhar(contexto: Contexto, numero: str) -> Detalhe | None:
 # ------------------------------------------------------------- atualização
 
 
-async def atualizar(contexto: Contexto, settings: Any = None) -> ciclo.Progresso:
+async def atualizar(
+    contexto: Contexto, settings: Any = None, *, uf: str | None = None
+) -> ciclo.Progresso:
     """Dispara o ciclo e volta na hora, como o "aprovar" faz.
 
     A atualização leva minutos — varredura nacional, embeddings e grafo.
@@ -314,6 +323,7 @@ async def atualizar(contexto: Contexto, settings: Any = None) -> ciclo.Progresso
         final = await ciclo.atualizar(
             contexto.perfil,
             settings=settings,
+            opcoes=ciclo.Opcoes(brasil=uf is None, uf=uf),
             aviso=contexto.atualizacao.registrar,
         )
         contexto.atualizacao.registrar(final)

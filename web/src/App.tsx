@@ -11,16 +11,42 @@ import type { Atualizacao, Detalhe, Escopo, ItemLista, ResumoFunil } from "./tip
  * está olhando a tela.
  */
 function Recorte({ escopo }: { escopo: Escopo }) {
-  const onde = escopo.ufs.length > 0 ? escopo.ufs.join(", ") : "Brasil";
-  const partes = [...escopo.modalidades, ...escopo.esferas, onde];
-
-  if (escopo.modalidades.length === 0) return null;
+  const partes = [escopo.foco, ...escopo.modalidades, ...escopo.esferas].filter(Boolean);
+  if (partes.length === 0) return null;
 
   return (
     <p className="recorte" title={partes.join(" · ")}>
+      {/* O assunto vem primeiro e em destaque: é a pergunta que o radar
+          responde. A modalidade é como a compra acontece — detalhe, não
+          manchete. */}
+      {escopo.foco && <span className="foco">{escopo.foco}</span>}
       <span className="modalidades">{escopo.modalidades.join(" · ")}</span>
-      <span className="onde">{onde}</span>
     </p>
+  );
+}
+
+/** Onde procurar. Muda a lista e o alvo da próxima coleta. */
+function SeletorDeUf({
+  ufs,
+  atual,
+  aoEscolher,
+}: {
+  ufs: string[];
+  atual: string | null;
+  aoEscolher: (uf: string | null) => void;
+}) {
+  return (
+    <label className="seletor-uf">
+      <span className="rotulo">onde</span>
+      <select value={atual ?? ""} onChange={(e) => aoEscolher(e.target.value || null)}>
+        <option value="">Brasil</option>
+        {ufs.map((uf) => (
+          <option key={uf} value={uf}>
+            {uf}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -104,6 +130,10 @@ export default function App() {
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
   const [analisando, setAnalisando] = useState(false);
   const [comEncerradas, setComEncerradas] = useState(false);
+  // A UF escolhida vale para as duas coisas: o que a lista mostra e o que
+  // a próxima coleta vai buscar. Separar as duas daria uma tela que exibe
+  // Goiás e atualiza o Brasil.
+  const [uf, setUf] = useState<string | null>(null);
   const [atualizacao, setAtualizacao] = useState<Atualizacao | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -114,18 +144,20 @@ export default function App() {
     try {
       const [novoResumo, novosItens] = await Promise.all([
         api.resumo(),
-        api.candidatas(40, comEncerradas),
+        api.candidatas(40, comEncerradas, uf),
       ]);
       setResumo(novoResumo);
       setItens(novosItens);
       setFalha(null);
-      setSelecionada((atual) => atual ?? novosItens[0]?.chave ?? null);
+      setSelecionada((atual) =>
+        novosItens.some((i) => i.chave === atual) ? atual : (novosItens[0]?.chave ?? null),
+      );
     } catch (erro) {
       setFalha(erro instanceof ErroDaApi ? erro.message : String(erro));
     } finally {
       setCarregando(false);
     }
-  }, [comEncerradas]);
+  }, [comEncerradas, uf]);
 
   useEffect(() => {
     void carregar();
@@ -211,7 +243,7 @@ export default function App() {
 
   async function atualizarAgora() {
     try {
-      setAtualizacao(await api.atualizar());
+      setAtualizacao(await api.atualizar(uf));
       acompanharAtualizacao();
     } catch (erro) {
       setFalha(erro instanceof ErroDaApi ? erro.message : String(erro));
@@ -243,6 +275,9 @@ export default function App() {
           {resumo && <Recorte escopo={resumo.escopo} />}
         </div>
         {resumo && <Medidores resumo={resumo} />}
+        {resumo && (
+          <SeletorDeUf ufs={resumo.ufs_com_candidatas} atual={uf} aoEscolher={setUf} />
+        )}
         <BotaoDeAtualizar estado={atualizacao} aoClicar={atualizarAgora} />
       </header>
 

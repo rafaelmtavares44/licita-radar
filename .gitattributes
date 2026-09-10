@@ -1,0 +1,23 @@
+# Fim de linha, decidido uma vez.
+#
+# Este projeto é escrito no Windows, roda no CI em Linux e será clonado
+# por quem estiver em qualquer um dos dois. Sem uma regra explícita, cada
+# máquina aplica a sua: o Git avisa a cada `git add`, e mais cedo ou mais
+# tarde alguém abre um diff de arquivo inteiro que só mudou de CRLF para
+# LF. LF em todo lugar, inclusive no disco de quem está no Windows —
+# editores modernos lidam com isso sem reclamar.
+* text=auto eol=lf
+
+# Windows não perdoa: um .bat com LF pode simplesmente não rodar.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binário não tem linha para converter — e converter corrompe.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.onnx binary

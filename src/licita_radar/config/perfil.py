@@ -118,6 +118,12 @@ class Perfil(BaseModel):
 
     id: str
     nome: str
+    #: O assunto da busca, em duas ou três palavras — "TI", "obras",
+    #: "saúde". Aparece no cabeçalho do painel. Não entra em nenhum
+    #: filtro: quem decide o que casa são as palavras-chave e o
+    #: embedding. Isto existe para quem olha a tela saber, sem abrir o
+    #: YAML, que radar está vendo.
+    foco: str = ""
     descricao: str = Field(min_length=30)
     cnaes: list[str] = Field(default_factory=list)
     palavras_chave: PalavrasChave = Field(default_factory=PalavrasChave)

@@ -9,6 +9,12 @@
 id: acme-software
 nome: Acme Software
 
+# O assunto da busca, em duas ou três palavras. Aparece no cabeçalho do
+# painel e não entra em filtro nenhum — quem decide o que casa são as
+# palavras-chave e o embedding. Isto existe para quem olha a tela saber,
+# sem abrir este arquivo, que radar está vendo.
+foco: Editais de TI
+
 # Esta descrição vira o embedding que representa a empresa no matching
 # semântico, e entra no prompt da camada de LLM. Escreva os serviços
 # concretos que vocês prestam — "empresa de tecnologia e inovação" casa

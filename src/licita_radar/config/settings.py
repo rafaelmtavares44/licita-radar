@@ -45,12 +45,13 @@ class Settings(BaseSettings):
     #: Intervalo mínimo entre chamadas. Dobra a cada 429 e volta devagar.
     pncp_intervalo_min_s: float = Field(default=0.2, ge=0.0, le=10.0)
     pncp_intervalo_max_s: float = Field(default=8.0, ge=0.5, le=60.0)
-    #: Páginas grandes são o remédio contra o 429, não contra a lentidão.
-    #: Com 50, o Pregão Eletrônico nacional passa de 111 páginas e o PNCP
-    #: começa a barrar por volta dali — e cada 429 dobra o intervalo do
-    #: freio, então a coleta desacelera exatamente onde tinha mais a fazer.
-    #: Com 500, o mesmo conteúdo cabe em ~12 chamadas. O limite é do PNCP.
-    pncp_tamanho_pagina: int = Field(default=500, ge=10, le=500)
+    #: Menos chamadas é o remédio contra o 429: com 50, o Pregão Eletrônico
+    #: nacional passa de 111 páginas e o PNCP começa a barrar dali em
+    #: diante. Mas 500 foi longe demais — a resposta fica pesada e a
+    #: primeira página não chegava dentro do timeout, o que só troca uma
+    #: espera por outra. 100 corta as chamadas pela metade sem inflar a
+    #: resposta. O jeito de verdade de encurtar a coleta é restringir a UF.
+    pncp_tamanho_pagina: int = Field(default=100, ge=10, le=500)
     pncp_cache_local: bool = False
     pncp_cache_dir: Path = Path(".cache_pncp")
 

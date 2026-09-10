@@ -263,13 +263,17 @@ async def test_andamento_conta_modalidade_e_pagina(
         andamento=passos.append,
     )
 
-    # cada modalidade: o aviso de entrada, e depois um por página
+    # cada modalidade: o aviso de entrada, e depois um por página pedida
     assert [(p.indice, p.modalidade, p.pagina) for p in passos[:3]] == [
         (1, 6, 0),
         (1, 6, 1),
         (1, 6, 2),
     ]
-    assert passos[1].de_paginas > 0  # a tela precisa do denominador
+    # A página 1 é anunciada antes de o PNCP responder, então ainda não há
+    # denominador — é esse aviso que prova que a coleta começou enquanto a
+    # primeira resposta não chega. Da página 2 em diante o total é sabido.
+    assert passos[1].de_paginas == 0
+    assert passos[2].de_paginas > 0
     assert passos[3].modalidade == 8
 
 

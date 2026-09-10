@@ -146,23 +146,55 @@ button {
   text-transform: uppercase;
 }
 
-/* Só a lista de modalidades encolhe. A etiqueta de abrangência é curta e
-   fica de fora do corte: era ela que o ellipsis comia primeiro. */
-.recorte .modalidades {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* A abrangência responde outra pergunta — "onde", não "o quê" — então
-   ganha marca própria em vez de virar mais um item da lista. */
-.recorte .onde {
+/* O assunto é a manchete; ele não encolhe. */
+.recorte .foco {
   flex: none;
   padding: 1px 5px;
   border-radius: 3px;
   background: var(--cobalto-fraco);
   color: var(--cobalto);
   font-weight: 600;
+}
+
+/* Só a lista de modalidades encolhe — o resto da linha é curto e não
+   pode ser o primeiro a sumir. */
+.recorte .modalidades {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "Onde" virou controle, não rótulo: mudar de estado muda a lista e o
+   alvo da próxima coleta, então precisa parecer clicável. */
+.seletor-uf {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 20px;
+}
+
+.seletor-uf .rotulo {
+  color: var(--tinta-fraca);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.seletor-uf select {
+  padding: 5px 8px;
+  border: 1px solid var(--borda-forte);
+  border-radius: 6px;
+  background: var(--superficie);
+  color: var(--tinta);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.seletor-uf select:focus-visible {
+  outline: 2px solid var(--cobalto);
+  outline-offset: 1px;
 }
 
 .medidores {

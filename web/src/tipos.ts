@@ -50,6 +50,8 @@ export interface Detalhe extends ItemLista {
 
 /** O recorte que o perfil define — o que este radar procura. */
 export interface Escopo {
+  /** O assunto, em duas ou três palavras — "TI", "obras". Vem do perfil. */
+  foco: string;
   modalidades: string[];
   /** Vazio = Brasil inteiro. */
   ufs: string[];
@@ -66,6 +68,8 @@ export interface ResumoFunil {
   novas_na_ultima: number;
   encerradas_escondidas: number;
   escopo: Escopo;
+  /** As UFs com candidata aberta agora — o que popula o seletor. */
+  ufs_com_candidatas: string[];
 }
 
 export interface Atualizacao {

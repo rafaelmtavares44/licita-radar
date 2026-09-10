@@ -33,8 +33,10 @@ async function pedir<T>(caminho: string, opcoes?: RequestInit): Promise<T> {
 export const api = {
   resumo: () => pedir<ResumoFunil>("/api/resumo"),
 
-  candidatas: (limite = 40, encerradas = false) =>
-    pedir<ItemLista[]>(`/api/candidatas?limite=${limite}&encerradas=${encerradas}`),
+  candidatas: (limite = 40, encerradas = false, uf: string | null = null) =>
+    pedir<ItemLista[]>(
+      `/api/candidatas?limite=${limite}&encerradas=${encerradas}${uf ? `&uf=${uf}` : ""}`,
+    ),
 
   detalhe: (chave: string) => pedir<Detalhe>(`/api/candidatas/${chave}`),
 
@@ -44,7 +46,8 @@ export const api = {
       body: JSON.stringify({ decisao, comentario: comentario || null }),
     }),
 
-  atualizar: () => pedir<Atualizacao>("/api/atualizar", { method: "POST" }),
+  atualizar: (uf: string | null = null) =>
+    pedir<Atualizacao>(`/api/atualizar${uf ? `?uf=${uf}` : ""}`, { method: "POST" }),
 
   estadoDaAtualizacao: () => pedir<Atualizacao>("/api/atualizar"),
 

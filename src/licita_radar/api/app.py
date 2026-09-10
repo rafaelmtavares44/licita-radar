@@ -114,15 +114,33 @@ def criar_app(settings: Settings | None = None, *, servir_painel: bool = True) -
         encerradas: Annotated[
             bool, Query(description="Inclui as que já passaram do prazo de proposta")
         ] = False,
+        uf: Annotated[
+            str | None, Query(min_length=2, max_length=2, description="Sigla, ex.: GO")
+        ] = None,
     ) -> list[ItemLista]:
         return await servico.listar(
-            contexto, limite=limite, so_candidatas=not todas, so_abertas=not encerradas
+            contexto,
+            limite=limite,
+            so_candidatas=not todas,
+            so_abertas=not encerradas,
+            uf=uf.upper() if uf else None,
         )
 
     @app.post("/api/atualizar", status_code=202)
-    async def disparar_atualizacao(contexto: Ctx) -> dict[str, Any]:
-        """Volta na hora; o ciclo corre em segundo plano."""
-        progresso = await servico.atualizar(contexto, settings=s)
+    async def disparar_atualizacao(
+        contexto: Ctx,
+        uf: Annotated[
+            str | None,
+            Query(min_length=2, max_length=2, description="Coleta só esta UF. Vazio = Brasil."),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Volta na hora; o ciclo corre em segundo plano.
+
+        A UF não é só filtro de tela: uma varredura nacional de Pregão
+        Eletrônico passa de cem páginas e o PNCP começa a barrar. Restringir
+        o estado é o que transforma dez minutos de espera em um.
+        """
+        progresso = await servico.atualizar(contexto, settings=s, uf=uf.upper() if uf else None)
         return progresso.como_dict()
 
     @app.get("/api/atualizar")
