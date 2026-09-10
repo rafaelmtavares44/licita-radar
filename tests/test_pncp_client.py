@@ -14,7 +14,7 @@ import pytest
 import respx
 
 from licita_radar.config.settings import Settings
-from licita_radar.ingest.pncp_client import PNCPClient, coletar
+from licita_radar.ingest.pncp_client import PNCPClient, coletar, descrever
 
 ROTA_PROPOSTA = "https://pncp.exemplo.test/api/consulta/v1/contratacoes/proposta"
 ROTA_PUBLICACAO = "https://pncp.exemplo.test/api/consulta/v1/contratacoes/publicacao"
@@ -171,7 +171,7 @@ async def test_coletar_deduplica_entre_modalidades(
         settings=settings_teste,
     )
 
-    assert len(resultado) == 1
+    assert len(resultado.contratacoes) == 1
 
 
 @respx.mock
@@ -191,4 +191,70 @@ async def test_modalidade_que_falha_nao_derruba_as_outras(
         settings=settings_teste,
     )
 
-    assert len(resultado) == 1  # meia ingestão vale mais que nenhuma
+    assert len(resultado.contratacoes) == 1  # meia ingestão vale mais que nenhuma
+    # ...desde que a metade que faltou apareça em algum lugar
+    assert [p.modalidade for p in resultado.puladas] == [6]
+    assert not resultado.completa
+
+
+@respx.mock
+async def test_timeout_nao_vira_mensagem_vazia(
+    settings_teste: Settings, pagina2: dict[str, Any]
+) -> None:
+    """`str(httpx.ReadTimeout())` é vazio — e um log vazio manda investigar
+    o lugar errado. O log dizia "modalidade 6 falhou e foi pulada:" e
+    terminava ali; parecia print cortado, era mensagem inexistente.
+    """
+
+    def responder(pedido: httpx.Request) -> httpx.Response:
+        # O timeout é retentável, então a modalidade 6 precisa falhar
+        # sempre — casar por parâmetro em vez de contar chamadas.
+        if pedido.url.params["codigoModalidadeContratacao"] == "6":
+            raise httpx.ReadTimeout("")
+        return httpx.Response(200, json=pagina2)
+
+    respx.get(ROTA_PROPOSTA).mock(side_effect=responder)
+
+    resultado = await coletar(
+        modalidades=[6, 8],
+        data_inicial=date(2026, 9, 1),
+        data_final=date(2026, 9, 30),
+        settings=settings_teste,
+    )
+
+    (pulada,) = resultado.puladas
+    assert pulada.motivo.strip()
+    assert "Pregão eletrônico" in str(pulada)
+
+
+async def test_descrever_sempre_diz_alguma_coisa() -> None:
+    pedido = httpx.Request("GET", "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta")
+    casos: list[BaseException] = [
+        httpx.ReadTimeout(""),
+        httpx.ConnectTimeout(""),
+        httpx.PoolTimeout(""),
+        httpx.RemoteProtocolError(""),
+        httpx.HTTPStatusError("", request=pedido, response=httpx.Response(429, request=pedido)),
+        ValueError(""),
+    ]
+    for erro in casos:
+        assert descrever(erro).strip(), f"{type(erro).__name__} descrito com string vazia"
+
+
+@respx.mock
+async def test_andamento_conta_modalidade_por_modalidade(
+    settings_teste: Settings, pagina2: dict[str, Any]
+) -> None:
+    """Nove minutos na mesma frase é indistinguível de travado."""
+    respx.get(ROTA_PROPOSTA).mock(return_value=httpx.Response(200, json=pagina2))
+    passos: list[tuple[int, int, int]] = []
+
+    await coletar(
+        modalidades=[6, 8],
+        data_inicial=date(2026, 9, 1),
+        data_final=date(2026, 9, 30),
+        settings=settings_teste,
+        andamento=lambda i, total, m: passos.append((i, total, m)),
+    )
+
+    assert passos == [(1, 2, 6), (2, 2, 8)]

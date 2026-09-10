@@ -225,6 +225,15 @@ export default function App() {
         </p>
       )}
 
+      {/* Uma coleta que perdeu uma modalidade continua sendo uma coleta —
+          mas dizer só "atualizado" transforma o buraco em silêncio, e
+          quem olha conclui que o PNCP não tinha nada. */}
+      {(atualizacao?.avisos?.length ?? 0) > 0 && (
+        <p className="aviso-topo parcial">
+          coleta incompleta · {atualizacao?.avisos.join(" · ")}
+        </p>
+      )}
+
       {falha && <p className="falha">{falha}</p>}
 
       <div className="corpo">

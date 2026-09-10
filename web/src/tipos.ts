@@ -69,6 +69,8 @@ export interface Atualizacao {
   avaliadas: number;
   candidatas: number;
   aguardando: number;
+  /** O que falhou sem derrubar o ciclo — uma modalidade que o PNCP não entregou. */
+  avisos: string[];
   erro: string | null;
 }
 

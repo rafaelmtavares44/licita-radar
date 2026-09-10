@@ -26,7 +26,9 @@ import asyncio
 import hashlib
 import json
 import logging
-from collections.abc import AsyncIterator, Sequence
+import time
+from collections.abc import AsyncIterator, Callable, Sequence
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from types import TracebackType
@@ -64,6 +66,39 @@ def _vale_retentar(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _STATUS_RETENTAVEIS
     return isinstance(exc, httpx.TransportError)
+
+
+#: O que dizer para cada falha de transporte. A ordem importa: a primeira
+#: que casar vence, então as classes mais específicas vêm antes.
+_NOMES: tuple[tuple[type[BaseException], str], ...] = (
+    (httpx.ConnectTimeout, "o PNCP não aceitou a conexão a tempo"),
+    (httpx.ReadTimeout, "o PNCP não respondeu a tempo"),
+    (httpx.WriteTimeout, "não deu para enviar o pedido a tempo"),
+    (httpx.PoolTimeout, "a fila de conexões estourou o tempo"),
+    (httpx.ConnectError, "não deu para conectar no PNCP"),
+    (httpx.RemoteProtocolError, "o PNCP encerrou a conexão no meio"),
+    (httpx.ReadError, "a conexão caiu durante a leitura"),
+)
+
+
+def descrever(erro: BaseException) -> str:
+    """Uma frase sobre a falha que nunca sai vazia.
+
+    `str(httpx.ReadTimeout())` é string vazia. O log saía como
+    ``modalidade 6 falhou e foi pulada:`` e terminava ali — indistinguível
+    de uma linha truncada, e sem nenhuma pista do que aconteceu. Um erro
+    sem mensagem custa mais caro que erro nenhum: manda investigar o
+    lugar errado.
+    """
+    if isinstance(erro, httpx.HTTPStatusError):
+        return f"HTTP {erro.response.status_code} em {erro.request.url.path}"
+
+    texto = str(erro).strip()
+    primeira = texto.splitlines()[0] if texto else ""
+    for classe, nome in _NOMES:
+        if isinstance(erro, classe):
+            return f"{nome} ({primeira})" if primeira else nome
+    return primeira or type(erro).__name__
 
 
 def _aaaammdd(dia: date) -> str:
@@ -234,6 +269,65 @@ class PNCPClient:
                 yield contratacao
 
 
+#: Nome de cada modalidade, para o log e a tela falarem a língua de quem
+#: espera. "modalidade 6 falhou" não diz nada; "Pregão Eletrônico falhou"
+#: diz que a maior fatia da coleta ficou de fora.
+MODALIDADES: dict[int, str] = {
+    1: "Leilão eletrônico",
+    2: "Diálogo competitivo",
+    3: "Concurso",
+    4: "Concorrência eletrônica",
+    5: "Concorrência presencial",
+    6: "Pregão eletrônico",
+    7: "Pregão presencial",
+    8: "Dispensa de licitação",
+    9: "Inexigibilidade",
+    10: "Manifestação de interesse",
+    11: "Pré-qualificação",
+    12: "Credenciamento",
+    13: "Leilão presencial",
+}
+
+
+def nome_da_modalidade(codigo: int) -> str:
+    return MODALIDADES.get(codigo, f"modalidade {codigo}")
+
+
+@dataclass(frozen=True)
+class Pulada:
+    """Uma modalidade que não terminou, e o que se sabe sobre isso."""
+
+    modalidade: int
+    motivo: str
+    #: Quantas já tinham vindo antes de a falha interromper a paginação.
+    trazidas: int = 0
+
+    def __str__(self) -> str:
+        return f"{nome_da_modalidade(self.modalidade)}: {self.motivo}"
+
+
+@dataclass
+class Coleta:
+    """O resultado da varredura — e o que ficou faltando nela.
+
+    Devolver só a lista fazia a coleta parcial passar por completa: quem
+    chamava contava as contratações e dizia "atualizado". O que falhou
+    morria no log. Aqui as duas coisas voltam juntas, porque quem mostra o
+    resultado precisa poder mostrar o buraco.
+    """
+
+    contratacoes: list[Contratacao] = field(default_factory=list)
+    puladas: list[Pulada] = field(default_factory=list)
+
+    @property
+    def completa(self) -> bool:
+        return not self.puladas
+
+
+#: Chamado ao começar cada modalidade: (índice a partir de 1, total, código).
+Andamento = Callable[[int, int, int], None]
+
+
 async def coletar(
     *,
     modalidades: Sequence[int],
@@ -242,13 +336,16 @@ async def coletar(
     uf: str | None = None,
     apenas_abertas: bool = True,
     settings: Settings | None = None,
-) -> list[Contratacao]:
+    andamento: Andamento | None = None,
+) -> Coleta:
     """Varre todas as modalidades pedidas e devolve o conjunto deduplicado.
 
     Uma modalidade que falhar não derruba as outras: o erro é registrado e
-    a varredura continua. Meia ingestão vale mais que nenhuma.
+    a varredura continua. Meia ingestão vale mais que nenhuma — desde que
+    quem receber saiba que é meia, e é para isso que serve `Coleta.puladas`.
     """
     encontradas: dict[str, Contratacao] = {}
+    puladas: list[Pulada] = []
 
     # Um freio só para a varredura inteira: o limite do PNCP é por cliente,
     # então a modalidade seguinte precisa herdar o ritmo que a anterior
@@ -259,7 +356,10 @@ async def coletar(
     )
 
     async with PNCPClient(settings, freio=freio) as cliente:
-        for modalidade in modalidades:
+        for indice, modalidade in enumerate(modalidades, start=1):
+            if andamento:
+                andamento(indice, len(modalidades), modalidade)
+            antes, comeco = len(encontradas), time.monotonic()
             try:
                 if apenas_abertas:
                     fluxo = cliente.contratacoes_com_proposta_aberta(
@@ -275,6 +375,23 @@ async def coletar(
                 async for contratacao in fluxo:
                     encontradas[contratacao.numero_controle_pncp] = contratacao
             except (httpx.HTTPError, ValueError) as erro:
-                logger.error("modalidade %s falhou e foi pulada: %s", modalidade, erro)
+                motivo = descrever(erro)
+                puladas.append(Pulada(modalidade, motivo, len(encontradas) - antes))
+                logger.error(
+                    "%s foi pulada depois de %ds: %s",
+                    nome_da_modalidade(modalidade),
+                    int(time.monotonic() - comeco),
+                    motivo,
+                )
+            else:
+                # Uma linha por modalidade concluída. Sem ela, uma varredura
+                # nacional passa minutos em silêncio e a única prova de que
+                # algo aconteceu é o erro de quem falhou.
+                logger.info(
+                    "%s: %d novas em %ds",
+                    nome_da_modalidade(modalidade),
+                    len(encontradas) - antes,
+                    int(time.monotonic() - comeco),
+                )
 
-    return list(encontradas.values())
+    return Coleta(list(encontradas.values()), puladas)

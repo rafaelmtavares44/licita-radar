@@ -29,7 +29,7 @@ from typing import Any, Literal
 from licita_radar.config.perfil import Perfil
 from licita_radar.config.settings import Settings, get_settings
 from licita_radar.graph.runner import abrir_radar, processar
-from licita_radar.ingest.pncp_client import coletar
+from licita_radar.ingest.pncp_client import coletar, nome_da_modalidade
 from licita_radar.matching.encoder import FastEmbedEncoder, similaridade_cosseno
 from licita_radar.matching.pontuacao import Avaliacao, Veredito, avaliar
 from licita_radar.matching.semantico import MotorSemantico
@@ -61,16 +61,25 @@ class Progresso:
     #: tempo isto está rodando. Uma etapa que demora minutos sem dizer
     #: quanto já passou é indistinguível de uma etapa travada.
     inicio: float = field(default_factory=time.monotonic)
+    #: Onde a etapa está por dentro — "Pregão eletrônico · 3 de 5". A
+    #: coleta leva minutos e passa por modalidades muito desiguais: sem
+    #: isto, a mesma frase fica na tela do começo ao fim.
+    detalhe: str = ""
     coletadas: int = 0
     novas: int = 0
     avaliadas: int = 0
     candidatas: int = 0
     aguardando: int = 0
+    #: O que deu errado sem derrubar o ciclo — uma modalidade pulada, por
+    #: exemplo. Sem isto a tela diz "atualizado" sobre uma coleta pela
+    #: metade, que é a pior das duas mentiras possíveis.
+    avisos: list[str] = field(default_factory=list)
     erro: str | None = None
 
     @property
     def mensagem(self) -> str:
-        return self.erro or DESCRICAO.get(self.etapa, self.etapa)
+        base = self.erro or DESCRICAO.get(self.etapa, self.etapa)
+        return f"{base} · {self.detalhe}" if self.detalhe and not self.erro else base
 
     @property
     def em_andamento(self) -> bool:
@@ -91,6 +100,7 @@ class Progresso:
             "avaliadas": self.avaliadas,
             "candidatas": self.candidatas,
             "aguardando": self.aguardando,
+            "avisos": list(self.avisos),
             "erro": self.erro,
         }
 
@@ -123,7 +133,12 @@ async def _coletar(
     hoje = date.today()
     uf_alvo = opcoes.alvo(perfil)
 
-    contratacoes = await coletar(
+    def andando(indice: int, total: int, modalidade: int) -> None:
+        # O objeto de progresso é o mesmo que a tela lê a cada GET, então
+        # mutá-lo aqui já basta: não há mudança de etapa para anunciar.
+        progresso.detalhe = f"{nome_da_modalidade(modalidade)} · {indice} de {total}"
+
+    coleta = await coletar(
         modalidades=perfil.restricoes.modalidades,
         data_inicial=hoje,
         # O endpoint de propostas filtra pelo FIM do prazo: a data precisa
@@ -132,8 +147,12 @@ async def _coletar(
         uf=uf_alvo,
         apenas_abertas=True,
         settings=settings,
+        andamento=andando,
     )
+    progresso.detalhe = ""
+    contratacoes = coleta.contratacoes
     progresso.coletadas = len(contratacoes)
+    progresso.avisos.extend(str(p) for p in coleta.puladas)
 
     async with Banco(settings) as banco:
         execucoes = ExecucaoRepo(banco)

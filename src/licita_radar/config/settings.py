@@ -32,7 +32,11 @@ class Settings(BaseSettings):
 
     # --- PNCP ---
     pncp_base_url: str = "https://pncp.gov.br/api/consulta"
-    pncp_timeout_s: float = 30.0
+    #: 30s parecia folgado até o Pregão Eletrônico nacional: página funda,
+    #: servidor lento, e o `ReadTimeout` derrubava a modalidade inteira
+    #: depois de esgotar as tentativas. O PNCP é devagar, não é mudo — a
+    #: mesma lição que a rota de arquivos já tinha dado.
+    pncp_timeout_s: float = 60.0
     pncp_max_tentativas: int = Field(default=5, ge=1, le=10)
     #: Duas chamadas simultâneas já bastam, e o PNCP agradece. Com três, uma
     #: varredura nacional levou 429 a partir da página 16.

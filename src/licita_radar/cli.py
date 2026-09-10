@@ -210,14 +210,17 @@ def cmd_ingest(
         console.print("[yellow]varredura nacional: isso pode levar alguns minutos[/yellow]")
 
     async def _executar() -> None:
-        contratacoes = await coletar(
+        coleta = await coletar(
             modalidades=modalidades,
             data_inicial=inicio,
             data_final=hoje if historico else limite_futuro,
             uf=uf_alvo,
             apenas_abertas=not historico,
         )
+        contratacoes = coleta.contratacoes
         console.print(f"[bold]{len(contratacoes)}[/bold] contratações vieram da API")
+        for pulada in coleta.puladas:
+            console.print(f"[yellow]pulada · {escape(str(pulada))}[/yellow]")
 
         if seco:
             for c in contratacoes[:10]:

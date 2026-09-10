@@ -705,6 +705,13 @@ button {
   font-weight: 500;
 }
 
+/* Coleta parcial não é sucesso nem falha: é o meio-termo que precisa
+   parecer diferente dos dois. */
+.aviso-topo.parcial {
+  background: var(--duvida-fundo);
+  color: var(--duvida);
+}
+
 .atualizar span em {
   display: block;
   font-style: normal;
