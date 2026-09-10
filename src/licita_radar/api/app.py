@@ -185,12 +185,21 @@ def _montar_painel(app: FastAPI) -> None:
     """
     app.mount("/assets", StaticFiles(directory=PAINEL / "assets"), name="assets")
 
+    #: O index aponta para arquivos cujo nome muda a cada build
+    #: (`index-Doq-q4wD.js`). Se o navegador guardar o index, ele pede na
+    #: próxima vez um arquivo que o build anterior já apagou: o CSS vem do
+    #: cache, o script dá 404, e a tela fica branca com o fundo certo —
+    #: o pior sintoma possível, porque parece que o servidor respondeu.
+    #: Os assets podem ser cacheados à vontade justamente porque o nome
+    #: deles carrega o conteúdo; o index, nunca.
+    nunca_guarde = {"Cache-Control": "no-store, must-revalidate"}
+
     @app.get("/{caminho:path}", include_in_schema=False)
     async def painel(caminho: str) -> Any:
         arquivo = PAINEL / caminho
         if caminho and arquivo.is_file():
             return FileResponse(arquivo)
-        return FileResponse(PAINEL / "index.html")
+        return FileResponse(PAINEL / "index.html", headers=nunca_guarde)
 
 
 #: Sem `web/dist`, a raiz não tem rota e o FastAPI devolve

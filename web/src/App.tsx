@@ -11,8 +11,13 @@ import type { Atualizacao, Detalhe, Escopo, ItemLista, ResumoFunil } from "./tip
  * diz seis abertas de quê. O recorte mora no `perfil.yaml`, longe de quem
  * está olhando a tela.
  */
-function Recorte({ escopo }: { escopo: Escopo }) {
-  const partes = [escopo.foco, ...escopo.modalidades, ...escopo.esferas].filter(Boolean);
+function Recorte({ escopo }: { escopo: Escopo | undefined }) {
+  if (!escopo) return null;
+  const partes = [
+    escopo.foco,
+    ...(escopo.modalidades ?? []),
+    ...(escopo.esferas ?? []),
+  ].filter(Boolean);
   if (partes.length === 0) return null;
 
   return (
@@ -21,7 +26,7 @@ function Recorte({ escopo }: { escopo: Escopo }) {
           responde. A modalidade é como a compra acontece — detalhe, não
           manchete. */}
       {escopo.foco && <span className="foco">{escopo.foco}</span>}
-      <span className="modalidades">{escopo.modalidades.join(" · ")}</span>
+      <span className="modalidades">{(escopo.modalidades ?? []).join(" · ")}</span>
     </p>
   );
 }
@@ -34,14 +39,18 @@ function Recorte({ escopo }: { escopo: Escopo }) {
  * que ele já tivesse sido coletado.
  */
 function SeletorDeUf({
-  contagem,
+  contagem: bruta,
   atual,
   aoEscolher,
 }: {
-  contagem: Record<string, number>;
+  contagem: Record<string, number> | undefined;
   atual: string | null;
   aoEscolher: (uf: string | null) => void;
 }) {
+  // O painel e a API são versionados juntos, mas nem sempre chegam
+  // juntos: um `dist` velho contra uma API nova recebe campos que não
+  // conhece e falta os que espera. Isso não pode derrubar a tela.
+  const contagem = bruta ?? {};
   const comResultado = UFS.filter((uf) => (contagem[uf] ?? 0) > 0);
   const restantes = UFS.filter((uf) => !(contagem[uf] ?? 0));
 

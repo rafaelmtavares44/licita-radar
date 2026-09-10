@@ -383,16 +383,24 @@ async def checar_pncp(settings: Settings) -> Checagem:
     }
     inicio = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=15.0) as cliente:
+        # A mesma paciência que o ingest tem. Com 15s fixos, esta checagem
+        # reprovava um PNCP que respondia em 10,7s — e mandava procurar
+        # problema de rede numa rede que estava boa. Um teste mais
+        # impaciente que o código real inventa falhas que o código real
+        # não tem.
+        async with httpx.AsyncClient(timeout=settings.pncp_timeout_s) as cliente:
             resposta = await cliente.get(url, params=params)
     except httpx.HTTPError as erro:
-        return Checagem(
-            "PNCP",
-            "API de consultas",
-            Estado.FALHA,
-            str(erro)[:80],
-            "sem internet, ou a rede bloqueia o pncp.gov.br",
+        detalhe = descrever(erro)
+        # Nunca diga "sem internet" sobre um timeout: a rede entregou o
+        # pedido, quem demorou foi o outro lado.
+        dica = (
+            f"o PNCP não respondeu em {settings.pncp_timeout_s:.0f}s — "
+            "ele costuma ser lento; tente de novo, ou aumente LR_PNCP_TIMEOUT_S"
+            if "a tempo" in detalhe
+            else "confira a rede, ou se algo bloqueia o pncp.gov.br"
         )
+        return Checagem("PNCP", "API de consultas", Estado.FALHA, detalhe[:90], dica)
 
     ms = (time.monotonic() - inicio) * 1000
     codigo = resposta.status_code
@@ -409,6 +417,16 @@ async def checar_pncp(settings: Settings) -> Checagem:
             f"HTTP {codigo} · {ms:.0f} ms",
             "a API respondeu, mas recusou os parâmetros desta checagem — "
             "a rede está boa, e o ingest usa outros",
+        )
+    # Responder devagar não é falha, mas também não é notícia irrelevante:
+    # é o que explica uma coleta que leva minutos.
+    if ms > 5_000:
+        return Checagem(
+            "PNCP",
+            "API de consultas",
+            Estado.AVISO,
+            f"HTTP {codigo} · {ms:.0f} ms",
+            "respondeu, mas devagar — a coleta vai levar o tempo dela",
         )
     return Checagem("PNCP", "API de consultas", Estado.OK, f"HTTP {codigo} · {ms:.0f} ms")
 

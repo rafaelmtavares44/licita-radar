@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from licita_radar.analise.extracao import extrair, ler_documentos, normalizar_texto
+from licita_radar.analise.extracao import _desempacotar, extrair, ler_documentos, normalizar_texto
 
 pypdf = pytest.importorskip("pypdf")
 
@@ -128,3 +128,39 @@ def test_diagnostico_diz_quando_tudo_e_imagem(tmp_path: Path) -> None:
 
     assert leitura.escaneado
     assert "OCR" in leitura.diagnostico
+
+
+def test_zip_com_caminho_longo_nao_derruba_o_pacote(tmp_path: Path) -> None:
+    """O Windows corta o caminho em 260 caracteres.
+
+    Um edital vem em zip com pastas aninhadas e nomes de anexo enormes.
+    Com `extractall`, um único nome comprido levantava OSError e o
+    projeto perdia o pacote inteiro — trinta anexos por causa de um.
+    """
+    fundo = "03 - Anexos do Termo de Referencia/03.1 - Anexo I do TR - " + "x" * 120 + ".txt"
+    pacote = tmp_path / "edital.zip"
+    with zipfile.ZipFile(pacote, "w") as z:
+        z.writestr("Edital.pdf", "conteudo do edital")
+        z.writestr(fundo, "conteudo do anexo")
+
+    extraidos = _desempacotar(pacote)
+
+    assert len(extraidos) == 2
+    for arquivo in extraidos:
+        assert arquivo.is_file()
+        # o nome achatado ainda diz de onde veio
+        assert len(arquivo.name) < 80
+    assert any("Anexo I do TR" in a.name for a in extraidos)
+
+
+def test_zip_slip_continua_barrado(tmp_path: Path) -> None:
+    """Achatar não pode ter aberto a porta que a filtragem fechava."""
+    pacote = tmp_path / "malicioso.zip"
+    with zipfile.ZipFile(pacote, "w") as z:
+        z.writestr("../fora.txt", "não deveria sair")
+        z.writestr("dentro.txt", "ok")
+
+    extraidos = _desempacotar(pacote)
+
+    assert [a.name for a in extraidos] == ["01 dentro.txt"]
+    assert not (tmp_path / "fora.txt").exists()

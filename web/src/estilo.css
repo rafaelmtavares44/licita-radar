@@ -793,3 +793,38 @@ button {
   color: var(--tinta-fraca);
   text-align: left;
 }
+
+/* A tela de "quebrou" precisa ser legível sem depender de nada que possa
+   ter quebrado junto — por isso não usa componente, nem token novo. */
+.quebrou {
+  max-width: 60ch;
+  margin: 60px auto;
+  padding: 0 22px;
+  color: var(--tinta);
+}
+
+.quebrou h1 {
+  margin: 0 0 12px;
+  color: var(--ausente);
+  font-size: 22px;
+}
+
+.quebrou .mensagem {
+  padding: 10px 14px;
+  border-left: 3px solid var(--ausente);
+  background: var(--ausente-fundo);
+  font-family: var(--mono, monospace);
+  font-size: 13px;
+}
+
+.quebrou pre {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--superficie-2);
+  font-size: 13px;
+}
+
+.quebrou .dica {
+  color: var(--tinta-fraca);
+  font-size: 13px;
+}

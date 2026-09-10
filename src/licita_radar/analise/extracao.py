@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 import unicodedata
 import zipfile
 from dataclasses import dataclass, field
@@ -192,25 +193,64 @@ def extrair(caminho: Path) -> Extracao:
     )
 
 
+#: Quanto do nome original sobrevive ao achatamento. O Windows corta o
+#: caminho inteiro em 260 caracteres, e um edital vem em zip com pastas
+#: como "03 - Anexos do TR/03.1 - Anexo I do TR - Cesta inicial de Itens
+#: (Especificacoes e Valores).pdf" — sozinho, esse nome já come um terço
+#: do orçamento.
+_NOME_MAXIMO = 60
+
+
+def _achatar(indice: int, nome: str) -> str:
+    """Um nome curto e único, que ainda diz de qual anexo veio.
+
+    A hierarquia interna do zip some: ela não acrescenta informação — o
+    nome do arquivo já diz "Anexo I do TR" — e é ela que estoura o
+    limite de caminho do Windows. O índice na frente garante que dois
+    anexos de pastas diferentes com o mesmo nome não se sobrescrevam.
+    """
+    base = Path(nome).name
+    caule, ponto, extensao = base.rpartition(".")
+    if not ponto:
+        caule, extensao = base, ""
+    if len(caule) > _NOME_MAXIMO:
+        caule = caule[:_NOME_MAXIMO].rstrip(" -_.")
+    return f"{indice:02d} {caule}{'.' + extensao if extensao else ''}"
+
+
 def _desempacotar(caminho: Path) -> list[Path]:
     """Zip é comum como "pacote do edital". Abre num diretório ao lado."""
     pasta = caminho.with_suffix("")
     try:
-        with zipfile.ZipFile(caminho) as pacote:
-            pasta.mkdir(parents=True, exist_ok=True)
-            nomes = [
-                n
-                for n in pacote.namelist()
-                # Um zip pode conter caminhos absolutos ou `..` e escrever
-                # fora da pasta de destino. É antigo, tem nome (zip slip) e
-                # continua funcionando em quem extrai sem olhar.
-                if not n.endswith("/") and not Path(n).is_absolute() and ".." not in Path(n).parts
-            ]
-            pacote.extractall(pasta, members=nomes)
-            return [pasta / nome for nome in nomes]
+        pacote = zipfile.ZipFile(caminho)
     except (zipfile.BadZipFile, OSError) as erro:
         logger.warning("zip ilegível %s: %s", caminho.name, erro)
         return []
+
+    extraidos: list[Path] = []
+    with pacote:
+        pasta.mkdir(parents=True, exist_ok=True)
+        nomes = [
+            n
+            for n in pacote.namelist()
+            # Um zip pode conter caminhos absolutos ou `..` e escrever
+            # fora da pasta de destino. É antigo, tem nome (zip slip) e
+            # continua funcionando em quem extrai sem olhar.
+            if not n.endswith("/") and not Path(n).is_absolute() and ".." not in Path(n).parts
+        ]
+        for indice, nome in enumerate(nomes, start=1):
+            destino = pasta / _achatar(indice, nome)
+            try:
+                # Um arquivo por vez, e não `extractall`: assim um anexo
+                # problemático custa um anexo, não o pacote inteiro. Antes,
+                # um único nome comprido derrubava os outros trinta.
+                with pacote.open(nome) as origem, destino.open("wb") as saida:
+                    shutil.copyfileobj(origem, saida)
+            except (zipfile.BadZipFile, OSError) as erro:
+                logger.warning("anexo pulado no zip %s: %s: %s", caminho.name, nome, erro)
+                continue
+            extraidos.append(destino)
+    return extraidos
 
 
 def ler_documentos(caminhos: list[Path], *, limite_caracteres: int = 400_000) -> Leitura:
