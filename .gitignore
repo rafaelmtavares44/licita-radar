@@ -32,3 +32,8 @@ perfil.yaml
 
 # rascunhos e saídas de sessão: não fazem parte do projeto
 Claude outputs/
+
+# rascunhos de depuração: úteis na máquina, não no repositório
+corpo.json
+resposta.json
+testar_llm.py
