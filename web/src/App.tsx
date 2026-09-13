@@ -193,6 +193,30 @@ export default function App() {
     void carregar();
   }, [carregar]);
 
+  // Quem sabe se há coleta rodando é o servidor, não esta aba.
+  //
+  // O estado da atualização só nascia ao clicar no botão. Quem recarregava
+  // a página durante uma varredura de quarenta minutos via o botão parado
+  // em "Atualizar editais" — e o resultado, quando chegava, não tinha a
+  // quem contar: a faixa com "N novas de M coletadas" dependia de um
+  // estado que a recarga tinha apagado.
+  useEffect(() => {
+    let vivo = true;
+    api
+      .estadoDaAtualizacao()
+      .then((estado) => {
+        if (!vivo || estado.etapa === "parado") return;
+        setAtualizacao(estado);
+        if (estado.em_andamento) acompanharAtualizacao();
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+    // uma vez, na abertura: daí em diante quem manda é o botão
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     // Trocar de estado troca a lista inteira. Sem limpar aqui, o painel
     // da direita continuava exibindo a contratação do estado anterior ao
