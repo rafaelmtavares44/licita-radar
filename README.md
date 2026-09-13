@@ -15,13 +15,14 @@ Varre o [PNCP](https://pncp.gov.br), entende o que a sua empresa vende, avisa s�
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![mypy](https://img.shields.io/badge/mypy-strict-1F5082)](pyproject.toml)
 [![Licença](https://img.shields.io/badge/licen%C3%A7a-Apache%202.0-green)](LICENSE)
+[![Release](https://img.shields.io/badge/release-v0.1.0-8A2BE2)](https://github.com/rafaelmtavares44/licita-radar/releases)
 
 <img src="docs/imagens/painel.png" alt="O painel do licita-radar: candidatas por score, com o resumo do edital e a marca de conferência em cada afirmação" width="820">
 
 </div>
 
-> [!WARNING]
-> **Em construção.** A v0.1 ainda não está publicada. Hoje o projeto coleta do PNCP (M1), pontua contra o seu perfil (M2), roda o grafo com revisão humana (M3), analisa o edital (M4), serve o painel (M5) e alerta no Telegram (M6). O [roadmap](#roadmap) diz o que falta.
+> [!NOTE]
+> **v0.1.0 — primeira versão publicada.** O ciclo roda ponta a ponta: coleta do PNCP, pontuação contra o perfil, grafo com revisão humana, leitura do edital com citação conferida, painel web e alerta no Telegram. O [roadmap](#roadmap) mostra o que vem depois.
 
 ---
 
@@ -415,7 +416,7 @@ O `fastembed` 0.7 trocou *CLS pooling* por *mean pooling* no mesmo modelo, com o
 | M4 | Analista de editais: download, extração e resumo com citação | ✅ |
 | M5 | Painel web: API HTTP e a tela de decisão | ✅ |
 | M6 | Alerta no Telegram | ✅ |
-| M7 | Acabamento e release `v0.1.0` | ⬜ |
+| M7 | Acabamento e release `v0.1.0` | ✅ |
 
 O alerta desceu na fila de propósito: sem o resumo do edital, ele avisaria a mesma coisa que os portais de licitação já avisam. Fora do escopo, ainda: múltiplos perfis e OCR de edital digitalizado — estão em [`docs/roadmap.md`](docs/roadmap.md) esperando a vez.
 

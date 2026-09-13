@@ -1,6 +1,6 @@
 [project]
 name = "licita-radar"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Radar de licitações públicas: lê o PNCP, entende o que a sua empresa vende e avisa só o que vale disputar."
 readme = "README.md"
 requires-python = ">=3.11"
