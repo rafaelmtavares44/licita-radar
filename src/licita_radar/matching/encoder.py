@@ -28,6 +28,28 @@ MODELO_PADRAO = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 DIMENSAO_PADRAO = 384
 
 
+def versao_do_fastembed() -> str:
+    """Qual fastembed está instalado — parte da identidade do vetor.
+
+    O nome do modelo não basta para dizer se dois vetores são
+    comparáveis. O fastembed 0.7 passou a usar mean pooling onde antes
+    usava CLS, **no mesmo modelo, com o mesmo nome**: vetores gerados
+    antes e depois vivem no mesmo espaço de 384 dimensões, têm a mesma
+    cara no banco, e não querem dizer a mesma coisa.
+
+    Uma comparação entre eles não falha — devolve um número plausível e
+    errado, que vira um score de relevância que ninguém tem como
+    auditar. Colar a versão na identidade faz a troca invalidar os
+    vetores antigos, que são recalculados na próxima rodada.
+    """
+    try:
+        from importlib.metadata import version
+
+        return version("fastembed")
+    except Exception:  # fastembed ausente (testes usam encoder de mentira)
+        return "sem-fastembed"
+
+
 @runtime_checkable
 class Encoder(Protocol):
     """Contrato mínimo: texto entra, vetor normalizado sai."""
@@ -51,7 +73,14 @@ class FastEmbedEncoder:
 
     @property
     def nome(self) -> str:
-        return self._nome
+        """A identidade do vetor, não só a do modelo.
+
+        É esta string que o banco guarda ao lado de cada embedding e que
+        decide o que precisa ser recalculado. Ela carrega a versão da
+        biblioteca porque o mesmo modelo, em versões diferentes, produz
+        vetores que não se comparam.
+        """
+        return f"{self._nome}@fastembed-{versao_do_fastembed()}"
 
     @property
     def dimensao(self) -> int:

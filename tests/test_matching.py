@@ -11,6 +11,7 @@ import pytest
 from licita_radar.config.perfil import Perfil
 from licita_radar.ingest.modelos import Contratacao
 from licita_radar.ingest.normalizar import normalizar_pagina
+from licita_radar.matching.encoder import MODELO_PADRAO, FastEmbedEncoder
 from licita_radar.matching.lexical import avaliar_elegibilidade, pontuar_lexicalmente
 from licita_radar.matching.pontuacao import Veredito, avaliar, explicar
 from licita_radar.matching.semantico import MotorSemantico
@@ -287,3 +288,19 @@ class TestEsfera:
         so_federal = Perfil.model_validate(perfil_valido)
 
         assert avaliar_elegibilidade(_contratacao(esfera=None), so_federal) is None
+
+
+def test_identidade_do_vetor_inclui_a_versao_da_biblioteca() -> None:
+    """O nome do modelo não diz se dois vetores são comparáveis.
+
+    O fastembed 0.7 trocou CLS por mean pooling no mesmo modelo, com o
+    mesmo nome. Vetores de antes e de depois têm 384 dimensões, a mesma
+    cara no banco, e significados diferentes — e compará-los não falha:
+    devolve um número plausível e errado.
+    """
+    encoder = FastEmbedEncoder()
+
+    assert encoder.nome.startswith(MODELO_PADRAO)
+    assert "@fastembed-" in encoder.nome
+    # o nome usado para BAIXAR o modelo continua limpo
+    assert encoder._nome == MODELO_PADRAO
