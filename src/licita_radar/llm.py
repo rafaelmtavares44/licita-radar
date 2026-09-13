@@ -42,6 +42,15 @@ _STATUS_RETENTAVEIS = frozenset({429, 500, 502, 503, 504})
 #: vê "o modelo falhou" sem saber que bastava aguardar vinte segundos.
 _TENTATIVAS = 5
 
+#: Quanto orçamento extra dar a quem pensa antes de escrever.
+#:
+#: O raciocínio sai do MESMO teto da resposta. Quem pede 600 tokens de um
+#: modelo que pensa não recebe 600 tokens de texto: recebe o que sobrar
+#: depois do pensamento — e o que sobra pode ser meia frase. A
+#: justificativa saiu como "...sustentação de sistemas legados e al",
+#: cortada no meio, sem erro nenhum no log.
+_RESERVA_PARA_PENSAR = 1024
+
 
 class _Vez:
     """A fila de quem fala com o provedor, e o tempo que ele pediu.
@@ -300,6 +309,10 @@ class LLMCompativelOpenAI:
         # esforço baixo evita isso numa justificativa de uma frase.
         if e_de_raciocinio(self._modelo):
             corpo["reasoning_effort"] = "low"
+            # Esforço baixo reduz o pensamento, não o elimina. Quem chama
+            # pede o tamanho do TEXTO que quer; a reserva é problema desta
+            # camada, que é a única que sabe se o modelo pensa.
+            corpo["max_tokens"] = max_tokens + _RESERVA_PARA_PENSAR
 
         # Quando a resposta precisa ser JSON, pedir ao provedor é muito mais
         # eficaz que pedir no prompt: o modelo passa a ser restringido na

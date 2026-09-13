@@ -194,7 +194,14 @@ export default function App() {
   }, [carregar]);
 
   useEffect(() => {
-    if (!selecionada) return;
+    // Trocar de estado troca a lista inteira. Sem limpar aqui, o painel
+    // da direita continuava exibindo a contratação do estado anterior ao
+    // lado de uma lista vazia — duas telas contando histórias
+    // diferentes, e a da direita parecendo a mais confiável.
+    if (!selecionada) {
+      setDetalhe(null);
+      return;
+    }
     let cancelado = false;
 
     api
