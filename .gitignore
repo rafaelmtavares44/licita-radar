@@ -29,3 +29,6 @@ perfil.yaml
 .vscode/
 .idea/
 .DS_Store
+
+# rascunhos e saídas de sessão: não fazem parte do projeto
+Claude outputs/

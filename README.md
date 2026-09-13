@@ -93,7 +93,7 @@ O `?` é o ponto. Um resumo que inventa uma exigência faz a empresa desistir de
 **Requisitos:** Python 3.11+ e Postgres 14+ (o `docker compose` sobe um para você).
 
 ```bash
-git clone https://github.com/SEU-USUARIO/licita-radar.git
+git clone https://github.com/rafaelmtavares44/licita-radar.git
 cd licita-radar
 
 docker compose up -d db                  # banco com pgvector já habilitado

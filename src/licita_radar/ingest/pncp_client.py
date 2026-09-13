@@ -101,7 +101,7 @@ class PNCPClient:
             timeout=self._s.pncp_timeout_s,
             headers={
                 "Accept": "application/json",
-                "User-Agent": "licita-radar/0.1 (+https://github.com/SEU-USUARIO/licita-radar)",
+                "User-Agent": "licita-radar/0.1 (+https://github.com/rafaelmtavares44/licita-radar)",
             },
         )
         self._proprio_cliente = cliente is None

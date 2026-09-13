@@ -71,8 +71,8 @@ dev = [
 licita-radar = "licita_radar.cli:app"
 
 [project.urls]
-Repository = "https://github.com/SEU-USUARIO/licita-radar"
-Issues = "https://github.com/SEU-USUARIO/licita-radar/issues"
+Repository = "https://github.com/rafaelmtavares44/licita-radar"
+Issues = "https://github.com/rafaelmtavares44/licita-radar/issues"
 
 [build-system]
 requires = ["hatchling"]
