@@ -12,7 +12,7 @@ Varre o [PNCP](https://pncp.gov.br), entende o que a sua empresa vende, avisa s√
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL%20+%20pgvector-4169E1?logo=postgresql&logoColor=white)](docs/decisoes/0003-postgres-e-pgvector-em-um-servico-so.md)
 [![React](https://img.shields.io/badge/React%20+%20TypeScript-61DAFB?logo=react&logoColor=black)](web)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+[![CI](https://github.com/rafaelmtavares44/licita-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/rafaelmtavares44/licita-radar/actions/workflows/ci.yml)
 [![mypy](https://img.shields.io/badge/mypy-strict-1F5082)](pyproject.toml)
 [![Licen√ßa](https://img.shields.io/badge/licen%C3%A7a-Apache%202.0-green)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v0.1.0-8A2BE2)](https://github.com/rafaelmtavares44/licita-radar/releases)
