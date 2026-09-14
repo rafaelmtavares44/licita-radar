@@ -139,8 +139,8 @@ def _para_item(linha: dict[str, Any], estado: dict[str, Any]) -> ItemLista:
         chave=chave(numero),
         numero_controle=numero,
         objeto=limpar_objeto(str(linha.get("objeto") or "")),
-        orgao=linha.get("orgao_nome"),  # type: ignore[arg-type]
-        uf=linha.get("uf"),  # type: ignore[arg-type]
+        orgao=linha.get("orgao_nome"),
+        uf=linha.get("uf"),
         valor_estimado=float(linha["valor_estimado"]) if linha.get("valor_estimado") else None,
         encerramento=_iso(linha.get("encerramento_proposta")),
         url_pncp=_url_pncp(numero),
