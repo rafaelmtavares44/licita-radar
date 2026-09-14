@@ -105,7 +105,11 @@ ignore = [
 # ---------------------------------------------------------------------------
 
 [tool.mypy]
-python_version = "3.11"
+# Sem `python_version` fixo de propósito: o mypy passa a assumir a versão do
+# interpretador em que está rodando. Fixar em 3.11 fazia o job de 3.12 quebrar
+# lendo os stubs do numpy, que usam `type X = ...` (sintaxe só de 3.12+) —
+# o erro aparecia num arquivo de terceiro, sem relação com este código.
+# A matriz do CI é que garante a compatibilidade: 3.11 é checado como 3.11.
 packages = ["licita_radar"]
 mypy_path = "src"
 strict = true
