@@ -100,7 +100,8 @@ def _linha(**extra: Any) -> dict[str, Any]:
         "uf": "AL",
         "municipio": "Maceió",
         "valor_estimado": 65001.91,
-        "encerramento_proposta": date(2026, 9, 20),
+        # relativa a hoje: data fixa "vence" com o calendário e a licitação some da lista
+        "encerramento_proposta": date.today() + timedelta(days=20),
         "score_final": 0.41,
         "score_lexical": 0.2,
         "score_semantico": 0.5,
